@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 460" width="500" height="460">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E3B2E"/>
+      <stop offset="100%" stop-color="#0A2E24"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7A1A"/>
+      <stop offset="100%" stop-color="#E85D04"/>
+    </linearGradient>
+    <linearGradient id="orangeTrail" gradientUnits="userSpaceOnUse" x1="85.44" y1="200.03" x2="288.09" y2="116.08">
+      <stop offset="0%" stop-color="#E85D04" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FF7A1A" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="lightTrail" gradientUnits="userSpaceOnUse" x1="314.56" y1="179.97" x2="111.91" y2="263.92">
+      <stop offset="0%" stop-color="#F4F1EA" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#F4F1EA" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="inkRough" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="500" height="460" rx="28" fill="url(#bg)"/>
+
+  <!-- sync loop mark -->
+  <g>
+    <path d="M 85.44,200.03 A 115,115 0 0 1 288.09,116.08"
+          fill="none" stroke="url(#orangeTrail)" stroke-width="20" stroke-linecap="round" filter="url(#inkRough)"/>
+    <path d="M 314.56,179.97 A 115,115 0 0 1 111.91,263.92"
+          fill="none" stroke="url(#lightTrail)" stroke-width="20" stroke-linecap="round" filter="url(#inkRough)"/>
+
+    <polygon points="311.23,143.66 266.34,121.28 296.98,95.56" fill="url(#orangeGrad)"/>
+    <polygon points="88.77,236.34 133.66,258.72 103.02,284.44" fill="#F4F1EA"/>
+
+    <!-- single box with checklist -->
+    <g transform="translate(200,190)">
+      <rect x="-17" y="3" width="34" height="22" rx="5" fill="#F4F1EA"/>
+      <line x1="-17" y1="3" x2="17" y2="3" stroke="#E85D04" stroke-width="3" stroke-linecap="round"/>
+      <rect x="-11" y="-5" width="8" height="8" rx="3" fill="#F4F1EA"/>
+      <rect x="3" y="-5" width="8" height="8" rx="3" fill="#F4F1EA"/>
+
+      <rect x="-6" y="-40" width="12" height="7" rx="2" fill="#E85D04"/>
+      <rect x="-17" y="-36" width="34" height="28" rx="5" fill="#F4F1EA"/>
+      <path d="M -9,-24 L -3,-18 L 9,-30" fill="none" stroke="#0E3B2E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="-9" y1="-8" x2="9" y2="-8" stroke="#0E3B2E" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="250" y="360" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="20" letter-spacing="3" fill="#F4F1EA" opacity="0.85">
+    SOLUÇÕES DE LOGÍSTICA
+  </text>
+  <text x="250" y="410" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="46" font-weight="700" fill="#F4F1EA">
+    D<tspan fill="#E85D04">.</tspan>sync
+  </text>
+</svg>
