@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO (Refatorado)
+// D.Sync - SISTEMA COMPLETO REFATORADO + EXPORTAÇÃO PDF
 // ============================================================
 
 const state = {
@@ -898,7 +898,6 @@ function salvarModalInsumos() {
 
 function closeModalInsumos() { document.getElementById('modalInsumos').style.display = 'none'; }
 
-// ===== RENDERIZAR INSUMOS =====
 function renderizarInsumos() {
   const container = document.getElementById('insumosContainer');
   if (!container) return;
@@ -934,7 +933,10 @@ function renderizarInsumos() {
     <div style="background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border);">
       <div class="insumos-header">
         <h3>📦 Estoque de Insumos</h3>
-        <button class="btn btn-primary btn-md" onclick="abrirModalInsumos()">✏️ Editar Insumos</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-md" onclick="abrirModalInsumos()">✏️ Editar Insumos</button>
+          <button class="btn btn-info btn-md" onclick="exportarInsumosPDF()">📄 Exportar PDF</button>
+        </div>
       </div>
 
       <div class="insumos-cards">
@@ -977,7 +979,7 @@ function renderizarInsumos() {
     </div>`;
 }
 
-// ===== PRATELEIRAS (refatorado) =====
+// ===== PRATELEIRAS =====
 function renderPosicaoOcupada(shelf, posNum, pos) {
   const info = state.produtos.find(p => p.id === pos.id);
   if (!info) return '';
@@ -1733,6 +1735,7 @@ function carregarCarga() {
     <div class="controls">
       <button class="warning" onclick="finalizarCarga()">🚛 Finalizar Carga</button>
       <button class="danger" onclick="zerarCarga()">🗑️ Limpar Reservas</button>
+      <button class="info" onclick="exportarCargaPDF()">📄 Exportar PDF</button>
     </div>`;
   if (state.carga.length === 0) {
     html += '<div style="text-align:center;padding:40px;color:var(--text-muted);">🚛 Nenhuma reserva.</div>';
@@ -3450,28 +3453,68 @@ function confirmarMovimentacao() {
   mostrarToast('✅ Movimentado!', 'success');
 }
 
-// ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo refatorado!');
 // ============================================================
-// EXPORTAÇÃO PDF
+// EXPORTAÇÃO PDF (jsPDF + autoTable)
 // ============================================================
 
 function getJSDateStr() {
-  const d = new Date();
-  return d.toLocaleString('pt-BR');
+  return new Date().toLocaleString('pt-BR');
 }
-
 function getJSDateSlug() {
   return new Date().toISOString().split('T')[0];
 }
 
-// ===== Estoque (prateleiras + produtos) =====
+// ===== Sanitização de texto pra PDF =====
+function sanitizarParaPDF(texto) {
+  if (texto === null || texto === undefined) return '';
+  let s = String(texto);
+
+  s = s.replace(/♻️?/g, '(REC)');
+  s = s.replace(/⚠️?/g, '!');
+  s = s.replace(/✅ ?/g, '');
+  s = s.replace(/🛍️?/g, '');
+  s = s.replace(/📦/g, '');
+  s = s.replace(/📋/g, '');
+  s = s.replace(/📄/g, '');
+  s = s.replace(/🚛/g, '');
+  s = s.replace(/📊/g, '');
+  s = s.replace(/💉/g, '');
+  s = s.replace(/👥/g, '');
+  s = s.replace(/⏸️?/g, '');
+  s = s.replace(/▶️?/g, '');
+  s = s.replace(/⏳/g, '');
+  s = s.replace(/🎉/g, '');
+  s = s.replace(/💡/g, '');
+  s = s.replace(/🔔/g, '');
+  s = s.replace(/📭/g, '');
+  s = s.replace(/🔄/g, '');
+  s = s.replace(/🔍/g, '');
+  s = s.replace(/👑/g, '');
+  s = s.replace(/👤/g, '');
+
+  s = s.replace(/[^\x00-\xFF]/g, '');
+  s = s.replace(/&/g, '&amp;');
+  s = s.replace(/</g, '&lt;');
+  s = s.replace(/>/g, '&gt;');
+
+  return s.trim();
+}
+
+// Wrapper do autoTable que sanitiza automaticamente
+function autoTableSeguro(doc, options) {
+  const opts = Object.assign({}, options);
+  if (opts.head) opts.head = opts.head.map(row => row.map(cell => sanitizarParaPDF(cell)));
+  if (opts.body) opts.body = opts.body.map(row => row.map(cell => sanitizarParaPDF(cell)));
+  if (opts.foot) opts.foot = opts.foot.map(row => row.map(cell => sanitizarParaPDF(cell)));
+  return doc.autoTable(opts);
+}
+
+// ===== PDF: ESTOQUE =====
 function exportarEstoquePDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // Cabeçalho
   doc.setFillColor(26, 43, 76);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
@@ -3480,13 +3523,12 @@ function exportarEstoquePDF() {
   doc.text('D.Sync', 14, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório de Estoque', 14, 19);
+  doc.text('Relatorio de Estoque', 14, 19);
 
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  // Estatísticas
   const totalProdutos = state.produtos.length;
   const totalUnidades = state.produtos.reduce((a, p) => a + (p.quantidade || 0), 0);
   const comEstoque = state.produtos.filter(p => (p.quantidade || 0) > 0).length;
@@ -3497,7 +3539,6 @@ function exportarEstoquePDF() {
   doc.text(`Produtos com estoque: ${comEstoque}`, 14, 46);
   doc.text(`Total de unidades no estoque: ${totalUnidades}`, 14, 52);
 
-  // Tabela por prateleira
   let yOffset = 60;
   state.prateleiras.forEach(shelf => {
     const produtosShelf = shelf.produtos || [];
@@ -3508,7 +3549,7 @@ function exportarEstoquePDF() {
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(26, 43, 76);
-    doc.text(`📦 Prateleira ${shelf.nome}`, 16, yOffset);
+    doc.text(sanitizarParaPDF(`Prateleira ${shelf.nome}`), 16, yOffset);
     yOffset += 2;
 
     const linhas = produtosShelf
@@ -3516,7 +3557,7 @@ function exportarEstoquePDF() {
       .map(p => {
         const prod = state.produtos.find(x => x.id === p.id);
         return [
-          `Posição ${p.posicao}`,
+          `Posicao ${p.posicao}`,
           prod ? prod.nome : '(removido)',
           prod ? (prod.codigoInterno || '-') : '-',
           String(p.quantidade),
@@ -3524,9 +3565,9 @@ function exportarEstoquePDF() {
         ];
       });
 
-    doc.autoTable({
+    autoTableSeguro(doc, {
       startY: yOffset + 3,
-      head: [['Posição', 'Produto', 'Código', 'Qtd (cx)', 'Caixa']],
+      head: [['Posicao', 'Produto', 'Codigo', 'Qtd (cx)', 'Caixa']],
       body: linhas,
       theme: 'grid',
       headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -3536,31 +3577,23 @@ function exportarEstoquePDF() {
     });
 
     yOffset = doc.lastAutoTable.finalY + 10;
-    if (yOffset > 250) {
-      doc.addPage();
-      yOffset = 20;
-    }
+    if (yOffset > 250) { doc.addPage(); yOffset = 20; }
   });
 
-  // Produtos sem endereço
   const semEstoque = state.produtos.filter(p => !getProductLocations(p.id).length);
   if (semEstoque.length > 0) {
     if (yOffset > 220) { doc.addPage(); yOffset = 20; }
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(220, 38, 38);
-    doc.text('⚠️ Produtos sem localização definida', 14, yOffset);
+    doc.text(sanitizarParaPDF('Produtos sem localizacao definida'), 14, yOffset);
     yOffset += 3;
 
-    const linhas = semEstoque.map(p => [
-      p.nome,
-      p.codigoInterno || '-',
-      String(p.quantidade || 0)
-    ]);
+    const linhas = semEstoque.map(p => [p.nome, p.codigoInterno || '-', String(p.quantidade || 0)]);
 
-    doc.autoTable({
+    autoTableSeguro(doc, {
       startY: yOffset + 3,
-      head: [['Produto', 'Código', 'Disponível']],
+      head: [['Produto', 'Codigo', 'Disponivel']],
       body: linhas,
       theme: 'grid',
       headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -3569,13 +3602,12 @@ function exportarEstoquePDF() {
     });
   }
 
-  // Rodapé em todas as páginas
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Estoque', 14, 290);
   }
 
@@ -3583,7 +3615,7 @@ function exportarEstoquePDF() {
   mostrarToast('📄 PDF do estoque gerado!', 'success');
 }
 
-// ===== Insumos =====
+// ===== PDF: INSUMOS =====
 function exportarInsumosPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3597,28 +3629,27 @@ function exportarInsumosPDF() {
   doc.text('D.Sync', 14, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório de Insumos', 14, 19);
+  doc.text('Relatorio de Insumos', 14, 19);
 
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  // Estoque dos 3 insumos principais
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('Estoque Consolidado', 14, 42);
 
-  doc.autoTable({
+  autoTableSeguro(doc, {
     startY: 45,
-    head: [['Insumo', 'Estoque', 'Alerta Mínimo', 'Situação']],
+    head: [['Insumo', 'Estoque', 'Alerta Minimo', 'Situacao']],
     body: [
-      ['📦 Caixa Modelo A', String(state.insumos.caixaModeloA), String(state.configInsumos.alertaCaixaModeloA),
-        state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA ? '⚠️ BAIXO' : '✅ OK'],
-      ['📦 Caixa Modelo B', String(state.insumos.caixaModeloB), String(state.configInsumos.alertaCaixaModeloB),
-        state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB ? '⚠️ BAIXO' : '✅ OK'],
-      ['🛍️ Embalagem 40x50', String(state.insumos.embalagem40x50 || 0), String(state.configInsumos.alertaEmbalagem40x50),
-        (state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50 ? '⚠️ BAIXO' : '✅ OK'],
+      ['Caixa Modelo A', String(state.insumos.caixaModeloA), String(state.configInsumos.alertaCaixaModeloA),
+        state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA ? 'BAIXO' : 'OK'],
+      ['Caixa Modelo B', String(state.insumos.caixaModeloB), String(state.configInsumos.alertaCaixaModeloB),
+        state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB ? 'BAIXO' : 'OK'],
+      ['Embalagem 40x50', String(state.insumos.embalagem40x50 || 0), String(state.configInsumos.alertaEmbalagem40x50),
+        (state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50 ? 'BAIXO' : 'OK'],
     ],
     theme: 'grid',
     headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 10 },
@@ -3630,11 +3661,10 @@ function exportarInsumosPDF() {
 
   let yOffset = doc.lastAutoTable.finalY + 12;
 
-  // Config por produto
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
-  doc.text('Configuração por Produto', 14, yOffset);
+  doc.text('Configuracao por Produto', 14, yOffset);
   yOffset += 3;
 
   const linhasProdutos = state.produtos.map(p => {
@@ -3652,11 +3682,11 @@ function exportarInsumosPDF() {
       String(config.embalagemPorCaixa),
       String(estoque),
       String(alerta),
-      baixo ? '⚠️ BAIXO' : 'OK'
+      baixo ? 'BAIXO' : 'OK'
     ];
   });
 
-  doc.autoTable({
+  autoTableSeguro(doc, {
     startY: yOffset + 3,
     head: [['Produto', 'Caixa', 'Embalagem', 'Emb/cx', 'Estoque', 'Alerta', 'Status']],
     body: linhasProdutos,
@@ -3666,12 +3696,8 @@ function exportarInsumosPDF() {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: 14, right: 14 },
     columnStyles: {
-      1: { halign: 'center' },
-      2: { halign: 'center' },
-      3: { halign: 'center' },
-      4: { halign: 'center' },
-      5: { halign: 'center' },
-      6: { halign: 'center', fontStyle: 'bold' }
+      1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' },
+      4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' }
     },
   });
 
@@ -3680,7 +3706,7 @@ function exportarInsumosPDF() {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Insumos', 14, 290);
   }
 
@@ -3688,7 +3714,7 @@ function exportarInsumosPDF() {
   mostrarToast('📄 PDF dos insumos gerado!', 'success');
 }
 
-// ===== Gráfico =====
+// ===== PDF: GRÁFICO =====
 function exportarGraficoPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   if (!state.chart) { mostrarToast('❌ Nenhum gráfico gerado ainda!', 'error'); return; }
@@ -3704,22 +3730,20 @@ function exportarGraficoPDF() {
   doc.text('D.Sync', 14, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório Gráfico de Estoque', 14, 19);
+  doc.text('Relatorio Grafico de Estoque', 14, 19);
 
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  // Captura a imagem do gráfico
   try {
     const imgData = state.chart.toBase64Image('image/png', 1);
     doc.addImage(imgData, 'PNG', 14, 38, 200, 130);
   } catch (e) {
     doc.setTextColor(200, 0, 0);
-    doc.text('Não foi possível capturar o gráfico.', 14, 45);
+    doc.text('Nao foi possivel capturar o grafico.', 14, 45);
   }
 
-  // Estatísticas ao lado
   const com = state.produtos.filter(p => p.quantidade > 0);
   const totalUnid = com.reduce((a, p) => a + p.quantidade, 0);
   const totalReservado = state.carga.reduce((a, c) => a + c.quantidade, 0);
@@ -3728,7 +3752,7 @@ function exportarGraficoPDF() {
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 43, 76);
-  doc.text('Estatísticas', 222, 45);
+  doc.text('Estatisticas', 222, 45);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -3736,9 +3760,8 @@ function exportarGraficoPDF() {
   doc.text(`Produtos com estoque: ${com.length}`, 222, 55);
   doc.text(`Total de unidades: ${totalUnid}`, 222, 62);
   doc.text(`Reservado para carga: ${totalReservado}`, 222, 69);
-  doc.text(`Média por produto: ${media}`, 222, 76);
+  doc.text(`Media por produto: ${media}`, 222, 76);
 
-  // Tabela embaixo (produtos com estoque)
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 43, 76);
@@ -3753,9 +3776,9 @@ function exportarGraficoPDF() {
       return [p.nome, p.codigoInterno || '-', String(p.quantidade || 0), locStr];
     });
 
-  doc.autoTable({
+  autoTableSeguro(doc, {
     startY: 183,
-    head: [['Produto', 'Código', 'Qtd', 'Localização']],
+    head: [['Produto', 'Codigo', 'Qtd', 'Localizacao']],
     body: linhas,
     theme: 'grid',
     headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -3770,7 +3793,7 @@ function exportarGraficoPDF() {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 290, 200, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 290, 200, { align: 'right' });
     doc.text('D.Sync - Sistema de Estoque', 14, 200);
   }
 
@@ -3778,58 +3801,7 @@ function exportarGraficoPDF() {
   mostrarToast('📄 PDF do gráfico gerado!', 'success');
 }
 
-// ===== Botões PDF (adicionados automaticamente) =====
-function injetarBotoesPDF() {
-  // Estoque → Prateleiras
-  const shelfControls = document.querySelector('#sub-tab-prateleiras .controls');
-  if (shelfControls && !document.getElementById('btnPDFEstoque')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFEstoque';
-    btn.className = 'primary';
-    btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarEstoquePDF;
-    shelfControls.appendChild(btn);
-  }
-
-  // Estoque → Insumos
-  const insumosControls = document.querySelector('#sub-tab-insumos .controls');
-  if (insumosControls && !document.getElementById('btnPDFInsumos')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFInsumos';
-    btn.className = 'info';
-    btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarInsumosPDF;
-    insumosControls.appendChild(btn);
-  }
-
-  // Estoque → Gráfico
-  const graficoControls = document.querySelector('.grafico-controls');
-  if (graficoControls && !document.getElementById('btnPDFGrafico')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFGrafico';
-    btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarGraficoPDF;
-    graficoControls.appendChild(btn);
-  }
-}
-
-// Injeta os botões quando o app carrega e ao trocar de sub-aba
-document.addEventListener('DOMContentLoaded', function () {
-  setTimeout(injetarBotoesPDF, 500);
-});
-
-// Chama de novo sempre que as sub-abas forem mostradas
-const _mostrarSubAbaOriginal = typeof mostrarSubAba === 'function' ? mostrarSubAba : null;
-if (_mostrarSubAbaOriginal) {
-  window.mostrarSubAba = function(sub) {
-    _mostrarSubAbaOriginal(sub);
-    setTimeout(injetarBotoesPDF, 50);
-  };
-}// ============================================================
-// EXPORTAÇÃO PDF - CARGA E PEDIDOS
-// ============================================================
-
-// ===== Carga atual (reservas) =====
+// ===== PDF: CARGA (completo) =====
 function exportarCargaPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3843,54 +3815,217 @@ function exportarCargaPDF() {
   doc.text('D.Sync', 14, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Relatório de Carga', 14, 19);
+  doc.text('Relatorio de Carga', 14, 19);
 
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  // Totais
-  const totalItens = state.carga.length;
+  const reservasCarga = state.carga.filter(c => c.pedidoCodigo === CARGA_PEDIDO_TAG);
+  const reservasPedido = state.carga.filter(c => c.pedidoCodigo && c.pedidoCodigo !== CARGA_PEDIDO_TAG);
+  const reservasAvulsas = state.carga.filter(c => !c.pedidoCodigo);
+
+  const totalReservas = state.carga.length;
   const totalCx = state.carga.reduce((a, c) => a + c.quantidade, 0);
-  const totalProdutos = new Set(state.carga.map(c => c.id)).size;
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
-  doc.text(`Reservas de carga: ${totalItens}`, 14, 40);
-  doc.text(`Produtos diferentes: ${totalProdutos}`, 14, 46);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Resumo Geral', 14, 40);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Total de reservas: ${totalReservas}`, 14, 46);
   doc.text(`Total de caixas reservadas: ${totalCx}`, 14, 52);
+  doc.text(`Reservas do Pedido de Carga: ${reservasCarga.length}`, 14, 58);
+  doc.text(`Reservas de Pedidos de Separacao: ${reservasPedido.length}`, 14, 64);
+  doc.text(`Reservas avulsas (sem pedido): ${reservasAvulsas.length}`, 14, 70);
 
-  if (state.carga.length === 0) {
-    doc.setTextColor(150, 150, 150);
+  let yOffset = 78;
+
+  if (state.pedidoCargaAtual.ativo && Object.keys(state.pedidoCargaAtual.itens || {}).length > 0) {
+    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
+
+    doc.setFillColor(26, 43, 76);
+    doc.rect(14, yOffset - 5, 182, 8, 'F');
     doc.setFontSize(11);
-    doc.text('Nenhuma reserva de carga no momento.', 14, 65);
-  } else {
-    const linhas = state.carga.map(item => {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(sanitizarParaPDF(`Pedido de Carga: ${state.pedidoCargaAtual.codigo}`), 16, yOffset);
+    yOffset += 3;
+
+    const itens = Object.values(state.pedidoCargaAtual.itens);
+    let totalPedida = 0, totalReservado = 0, totalProduzido = 0, totalFalta = 0;
+
+    const linhas = itens.map(item => {
+      const reservado = getReservadoCargaAtual(item.produtoId);
+      const produzido = item.quantidadeProduzida || 0;
+      const falta = getFaltaCargaAtual(item);
+      totalPedida += item.quantidadePedida;
+      totalReservado += reservado;
+      totalProduzido += produzido;
+      totalFalta += falta;
+      return [
+        item.nome,
+        item.codigoInterno || '-',
+        String(item.quantidadePedida),
+        String(reservado),
+        String(produzido),
+        String(falta),
+        falta === 0 ? 'OK' : 'PENDENTE'
+      ];
+    });
+
+    linhas.push(['TOTAL', '', String(totalPedida), String(totalReservado), String(totalProduzido), String(totalFalta), totalFalta === 0 ? 'OK' : '']);
+
+    autoTableSeguro(doc, {
+      startY: yOffset + 3,
+      head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Produz.', 'Falta', 'Status']],
+      body: linhas,
+      theme: 'grid',
+      headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8.5, textColor: 30 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14, right: 14 },
+      columnStyles: {
+        2: { halign: 'center' }, 3: { halign: 'center' },
+        4: { halign: 'center' }, 5: { halign: 'center' },
+        6: { halign: 'center', fontStyle: 'bold' }
+      },
+      didParseCell: function(data) {
+        if (data.row.index === linhas.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [240, 242, 245];
+        }
+        if (data.column.index === 5 && data.row.index !== linhas.length - 1) {
+          const valor = parseInt(data.cell.raw);
+          if (!isNaN(valor) && valor > 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
+          else if (valor === 0) { data.cell.styles.textColor = [16, 185, 129]; }
+        }
+        if (data.column.index === 6 && data.row.index !== linhas.length - 1) {
+          const txt = String(data.cell.raw);
+          if (txt === 'PENDENTE') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
+          else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; data.cell.styles.fontStyle = 'bold'; }
+        }
+      }
+    });
+
+    yOffset = doc.lastAutoTable.finalY + 12;
+  }
+
+  const pedidosComReserva = {};
+  reservasPedido.forEach(r => {
+    if (!pedidosComReserva[r.pedidoCodigo]) pedidosComReserva[r.pedidoCodigo] = [];
+    pedidosComReserva[r.pedidoCodigo].push(r);
+  });
+
+  Object.entries(pedidosComReserva).forEach(([codigoPedido, reservas]) => {
+    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
+
+    doc.setFillColor(5, 150, 105);
+    doc.rect(14, yOffset - 5, 182, 8, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(sanitizarParaPDF(`Pedido de Separacao: ${codigoPedido}`), 16, yOffset);
+    yOffset += 3;
+
+    const porProduto = {};
+    reservas.forEach(r => {
+      if (!porProduto[r.id]) {
+        const prod = state.produtos.find(p => p.id === r.id);
+        porProduto[r.id] = {
+          nome: prod ? prod.nome : '(removido)',
+          codigo: prod ? (prod.codigoInterno || '-') : '-',
+          reservada: 0,
+          locais: []
+        };
+      }
+      porProduto[r.id].reservada += r.quantidade;
+      const nomePrat = state.prateleiras.find(s => s.id === r.prateleira)?.nome || '?';
+      porProduto[r.id].locais.push(`${nomePrat}${r.posicao}(${r.quantidade})`);
+    });
+
+    const pedidoSalvo = state.pedidosSeparar.find(p => p.codigo === codigoPedido);
+
+    const linhas = Object.entries(porProduto).map(([pid, dados]) => {
+      const itemPedido = pedidoSalvo?.itens?.[pid];
+      const pedida = itemPedido ? itemPedido.pacotes : dados.reservada;
+      const falta = Math.max(0, pedida - dados.reservada);
+      return [
+        dados.nome,
+        dados.codigo,
+        String(pedida),
+        String(dados.reservada),
+        String(falta),
+        dados.locais.join(', ')
+      ];
+    });
+
+    autoTableSeguro(doc, {
+      startY: yOffset + 3,
+      head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Falta', 'Local']],
+      body: linhas,
+      theme: 'grid',
+      headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8, textColor: 30 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14, right: 14 },
+      columnStyles: {
+        2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center', fontStyle: 'bold' }
+      },
+      didParseCell: function(data) {
+        if (data.column.index === 4) {
+          const valor = parseInt(data.cell.raw);
+          if (!isNaN(valor) && valor > 0) { data.cell.styles.textColor = [220, 38, 38]; }
+          else if (valor === 0) { data.cell.styles.textColor = [16, 185, 129]; }
+        }
+      }
+    });
+
+    yOffset = doc.lastAutoTable.finalY + 12;
+  });
+
+  if (reservasAvulsas.length > 0) {
+    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
+
+    doc.setFillColor(245, 158, 11);
+    doc.rect(14, yOffset - 5, 182, 8, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('Reservas Avulsas (sem pedido)', 16, yOffset);
+    yOffset += 3;
+
+    const linhas = reservasAvulsas.map(item => {
       const produto = state.produtos.find(p => p.id === item.id);
       const nomePrat = state.prateleiras.find(s => s.id === item.prateleira)?.nome || '?';
       const local = item.prateleira && item.posicao ? `${nomePrat}${item.posicao}` : '-';
-      const isCarga = item.pedidoCodigo === CARGA_PEDIDO_TAG;
-      const pedido = item.pedidoCodigo ? (isCarga ? '🚛 CARGA' : item.pedidoCodigo) : '-';
       return [
         produto ? produto.nome : '(removido)',
         produto ? (produto.codigoInterno || '-') : '-',
         String(item.quantidade),
-        local,
-        pedido
+        local
       ];
     });
 
-    doc.autoTable({
-      startY: 60,
-      head: [['Produto', 'Código', 'Qtd (cx)', 'Local', 'Pedido']],
+    autoTableSeguro(doc, {
+      startY: yOffset + 3,
+      head: [['Produto', 'Codigo', 'Qtd (cx)', 'Local']],
       body: linhas,
       theme: 'grid',
-      headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: 30 },
+      headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8.5, textColor: 30 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' } }
     });
+
+    yOffset = doc.lastAutoTable.finalY + 12;
+  }
+
+  if (totalReservas === 0) {
+    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(11);
+    doc.text('Nenhuma reserva de carga no momento.', 14, yOffset);
   }
 
   const totalPag = doc.internal.getNumberOfPages();
@@ -3898,7 +4033,7 @@ function exportarCargaPDF() {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Carga', 14, 290);
   }
 
@@ -3906,7 +4041,7 @@ function exportarCargaPDF() {
   mostrarToast('📄 PDF da carga gerado!', 'success');
 }
 
-// ===== Lista de Pedidos para Separar (visão geral) =====
+// ===== PDF: PEDIDOS PARA SEPARAR =====
 function exportarPedidosSepararPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3937,7 +4072,7 @@ function exportarPedidosSepararPDF() {
     doc.text('Nenhum pedido pendente no momento.', 14, 52);
   } else {
     let yOffset = 48;
-    state.pedidosSeparar.forEach((pedido, idx) => {
+    state.pedidosSeparar.forEach((pedido) => {
       if (yOffset > 240) { doc.addPage(); yOffset = 20; }
 
       doc.setFillColor(240, 253, 244);
@@ -3945,14 +4080,14 @@ function exportarPedidosSepararPDF() {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(5, 150, 105);
-      doc.text(`📋 Pedido: ${pedido.codigo}`, 16, yOffset);
+      doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
       yOffset += 2;
 
       const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
-      doc.text(`Criado em: ${pedido.dataCriacao || '-'} · Total: ${totalCx} caixas`, 16, yOffset + 4);
+      doc.text(`Criado em: ${pedido.dataCriacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
       yOffset += 5;
 
       const linhas = Object.values(pedido.itens).map(item => {
@@ -3966,13 +4101,13 @@ function exportarPedidosSepararPDF() {
           String(item.pacotes),
           String(res),
           String(falta),
-          falta === 0 ? '✅ OK' : '⚠️ Faltando'
+          falta === 0 ? 'OK' : 'FALTANDO'
         ];
       });
 
-      doc.autoTable({
+      autoTableSeguro(doc, {
         startY: yOffset + 3,
-        head: [['Produto', 'Código', 'Pedido', 'Reservado', 'Falta', 'Status']],
+        head: [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']],
         body: linhas,
         theme: 'grid',
         headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
@@ -3980,11 +4115,16 @@ function exportarPedidosSepararPDF() {
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 14, right: 14 },
         columnStyles: {
-          2: { halign: 'center' },
-          3: { halign: 'center' },
-          4: { halign: 'center' },
-          5: { halign: 'center', fontStyle: 'bold' }
+          2: { halign: 'center' }, 3: { halign: 'center' },
+          4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' }
         },
+        didParseCell: function(data) {
+          if (data.column.index === 5 && data.row.index >= 0) {
+            const txt = String(data.cell.raw);
+            if (txt === 'FALTANDO') { data.cell.styles.textColor = [220, 38, 38]; }
+            else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; }
+          }
+        }
       });
 
       yOffset = doc.lastAutoTable.finalY + 12;
@@ -3996,7 +4136,7 @@ function exportarPedidosSepararPDF() {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Pedidos para Separar', 14, 290);
   }
 
@@ -4004,7 +4144,7 @@ function exportarPedidosSepararPDF() {
   mostrarToast('📄 PDF dos pedidos gerado!', 'success');
 }
 
-// ===== Lista de Pedidos Finalizados =====
+// ===== PDF: PEDIDOS FINALIZADOS =====
 function exportarPedidosFinalizadosPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -4044,14 +4184,14 @@ function exportarPedidosFinalizadosPDF() {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(71, 85, 105);
-      doc.text(`✅ Pedido: ${pedido.codigo}`, 16, yOffset);
+      doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
       yOffset += 2;
 
       const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
-      doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'} · Total: ${totalCx} caixas`, 16, yOffset + 4);
+      doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
       yOffset += 5;
 
       const linhas = Object.values(pedido.itens).map(item => [
@@ -4060,9 +4200,9 @@ function exportarPedidosFinalizadosPDF() {
         String(item.pacotes)
       ]);
 
-      doc.autoTable({
+      autoTableSeguro(doc, {
         startY: yOffset + 3,
-        head: [['Produto', 'Código', 'Qtd (cx)']],
+        head: [['Produto', 'Codigo', 'Qtd (cx)']],
         body: linhas,
         theme: 'grid',
         headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
@@ -4081,7 +4221,7 @@ function exportarPedidosFinalizadosPDF() {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Pedidos Finalizados', 14, 290);
   }
 
@@ -4089,7 +4229,7 @@ function exportarPedidosFinalizadosPDF() {
   mostrarToast('📄 PDF dos finalizados gerado!', 'success');
 }
 
-// ===== PDF individual de um pedido para separar =====
+// ===== PDF: PEDIDO INDIVIDUAL =====
 function exportarPedidoIndividualPDF(codigo, tipo) {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const lista = tipo === 'finalizado' ? state.pedidosFinalizados : state.pedidosSeparar;
@@ -4108,17 +4248,16 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   doc.text('D.Sync', 14, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(tipo === 'finalizado' ? 'Pedido Finalizado' : 'Pedido de Separação', 14, 19);
+  doc.text(tipo === 'finalizado' ? 'Pedido Finalizado' : 'Pedido de Separacao', 14, 19);
 
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  // Cabeçalho do pedido
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...corFundo);
-  doc.text(`Pedido: ${pedido.codigo}`, 14, 44);
+  doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 14, 44);
 
   const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
   const totalVol = Object.values(pedido.itens).reduce((a, i) => a + i.caixas, 0);
@@ -4135,30 +4274,29 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   doc.text(`Total de volumes (caixas): ${totalVol}`, 14, tipo === 'finalizado' ? 70 : 64);
   doc.text(`Total de caixas pedidas: ${totalCx}`, 14, tipo === 'finalizado' ? 76 : 70);
 
-  // Tabela de itens
   const linhas = Object.values(pedido.itens).map(item => {
+    if (tipo === 'finalizado') {
+      return [item.nome, item.codigoInterno || '-', String(item.pacotes)];
+    }
     const res = state.carga
       .filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo)
       .reduce((a, c) => a + c.quantidade, 0);
     const falta = Math.max(0, item.pacotes - res);
-    if (tipo === 'finalizado') {
-      return [item.nome, item.codigoInterno || '-', String(item.pacotes)];
-    }
     return [
       item.nome,
       item.codigoInterno || '-',
       String(item.pacotes),
       String(res),
       String(falta),
-      falta === 0 ? '✅ OK' : '⚠️ Faltando'
+      falta === 0 ? 'OK' : 'FALTANDO'
     ];
   });
 
   const headers = tipo === 'finalizado'
-    ? [['Produto', 'Código', 'Qtd (cx)']]
-    : [['Produto', 'Código', 'Pedido', 'Reservado', 'Falta', 'Status']];
+    ? [['Produto', 'Codigo', 'Qtd (cx)']]
+    : [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']];
 
-  doc.autoTable({
+  autoTableSeguro(doc, {
     startY: tipo === 'finalizado' ? 84 : 78,
     head: headers,
     body: linhas,
@@ -4170,9 +4308,20 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
     columnStyles: tipo === 'finalizado'
       ? { 2: { halign: 'center' } }
       : { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
+    didParseCell: function(data) {
+      if (tipo !== 'finalizado' && data.column.index === 5) {
+        const txt = String(data.cell.raw);
+        if (txt === 'FALTANDO') { data.cell.styles.textColor = [220, 38, 38]; }
+        else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; }
+      }
+      if (tipo !== 'finalizado' && data.column.index === 4) {
+        const valor = parseInt(data.cell.raw);
+        if (!isNaN(valor) && valor > 0) data.cell.styles.textColor = [220, 38, 38];
+        else if (valor === 0) data.cell.styles.textColor = [16, 185, 129];
+      }
+    }
   });
 
-  // Assinatura no final
   const finalY = doc.lastAutoTable.finalY + 20;
   if (finalY < 260) {
     doc.setDrawColor(150, 150, 150);
@@ -4180,7 +4329,7 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
     doc.line(120, finalY, 196, finalY);
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
-    doc.text('Responsável pela separação', 14, finalY + 4);
+    doc.text('Responsavel pela separacao', 14, finalY + 4);
     doc.text('Conferente', 120, finalY + 4);
   }
 
@@ -4189,7 +4338,7 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text(`Página ${i} de ${totalPag}`, 200, 290, { align: 'right' });
+    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync', 14, 290);
   }
 
@@ -4197,20 +4346,30 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   mostrarToast('📄 PDF do pedido gerado!', 'success');
 }
 
-// ===== Adicionar botões de PDF nas abas de Carga e Pedidos =====
-function injetarBotoesPDFCargaPedidos() {
-  // Sub-aba Carga → controles
-  const cargaControls = document.querySelector('#sub-tab-carga .controls');
-  if (cargaControls && !document.getElementById('btnPDFCarga')) {
+// ===== Injeção de botões PDF nas telas =====
+function injetarBotoesPDF() {
+  // Estoque → Prateleiras
+  const shelfControls = document.querySelector('#sub-tab-prateleiras .controls');
+  if (shelfControls && !document.getElementById('btnPDFEstoque')) {
     const btn = document.createElement('button');
-    btn.id = 'btnPDFCarga';
+    btn.id = 'btnPDFEstoque';
     btn.className = 'info';
     btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarCargaPDF;
-    cargaControls.appendChild(btn);
+    btn.onclick = exportarEstoquePDF;
+    shelfControls.appendChild(btn);
   }
 
-  // Sub-aba Separar → lista de pedidos
+  // Estoque → Gráfico
+  const graficoControls = document.querySelector('.grafico-controls');
+  if (graficoControls && !document.getElementById('btnPDFGrafico')) {
+    const btn = document.createElement('button');
+    btn.id = 'btnPDFGrafico';
+    btn.textContent = '📄 Exportar PDF';
+    btn.onclick = exportarGraficoPDF;
+    graficoControls.appendChild(btn);
+  }
+
+  // Pedidos → Separar
   const separarContainer = document.querySelector('#sub-tab-separar .pedido-lista-container');
   if (separarContainer && !document.getElementById('btnPDFSeparar')) {
     const btn = document.createElement('button');
@@ -4222,7 +4381,7 @@ function injetarBotoesPDFCargaPedidos() {
     separarContainer.insertBefore(btn, separarContainer.querySelector('#listaPedidosSeparar'));
   }
 
-  // Sub-aba Finalizado → lista de pedidos
+  // Pedidos → Finalizado
   const finalContainer = document.querySelector('#sub-tab-finalizado .pedido-lista-container');
   if (finalContainer && !document.getElementById('btnPDFFinal')) {
     const btn = document.createElement('button');
@@ -4234,7 +4393,7 @@ function injetarBotoesPDFCargaPedidos() {
     finalContainer.insertBefore(btn, finalContainer.querySelector('#listaPedidosFinalizados'));
   }
 
-  // Botões individuais em cada pedido (para separar)
+  // Botões individuais em cada pedido (separar)
   document.querySelectorAll('#listaPedidosSeparar .pedido-card').forEach(card => {
     if (card.querySelector('.btn-pdf-pedido')) return;
     const codigo = card.querySelector('.pedido-codigo')?.textContent.replace('📋', '').trim();
@@ -4267,17 +4426,16 @@ function injetarBotoesPDFCargaPedidos() {
   });
 }
 
-// Chama ao carregar e sempre que atualizar
 document.addEventListener('DOMContentLoaded', function () {
-  setTimeout(injetarBotoesPDFCargaPedidos, 500);
+  setTimeout(injetarBotoesPDF, 500);
 });
 
-// Envolve as funções que atualizam as listas para reinjetar botões
+// Envolve as funções que atualizam listas para reinjetar botões
 const _atualizarListasPedidosOriginal = typeof atualizarListasPedidos === 'function' ? atualizarListasPedidos : null;
 if (_atualizarListasPedidosOriginal) {
   window.atualizarListasPedidos = function() {
     _atualizarListasPedidosOriginal();
-    setTimeout(injetarBotoesPDFCargaPedidos, 50);
+    setTimeout(injetarBotoesPDF, 50);
   };
 }
 
@@ -4285,15 +4443,17 @@ const _carregarCargaOriginal = typeof carregarCarga === 'function' ? carregarCar
 if (_carregarCargaOriginal) {
   window.carregarCarga = function() {
     _carregarCargaOriginal();
-    setTimeout(injetarBotoesPDFCargaPedidos, 50);
+    setTimeout(injetarBotoesPDF, 50);
   };
 }
 
-// Também injeta ao trocar de sub-aba
-const _mostrarSubAbaOriginal2 = typeof mostrarSubAba === 'function' ? mostrarSubAba : null;
-if (_mostrarSubAbaOriginal2) {
+const _mostrarSubAbaOriginal = typeof mostrarSubAba === 'function' ? mostrarSubAba : null;
+if (_mostrarSubAbaOriginal) {
   window.mostrarSubAba = function(sub) {
-    _mostrarSubAbaOriginal2(sub);
-    setTimeout(injetarBotoesPDFCargaPedidos, 50);
+    _mostrarSubAbaOriginal(sub);
+    setTimeout(injetarBotoesPDF, 50);
   };
 }
+
+// ===== INICIAR =====
+console.log('🚀 D.Sync - Sistema completo + PDFs!');
