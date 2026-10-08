@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO REFATORADO + EXPORTAÇÃO PDF
+// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + LEITOR MELHORADO
 // ============================================================
 
 const state = {
@@ -187,29 +187,17 @@ function migrarProdutosParaInjecao() {
       return;
     }
     const config = state.produtoInsumoMap[p.id];
-    if (!config.tipoEmbalagem) {
-      config.tipoEmbalagem = autoDetectarEmbalagem(p.nome);
-      alterou = true;
-    }
-    if (!config.modeloCaixa) {
-      config.modeloCaixa = 'A';
-      alterou = true;
-    }
+    if (!config.tipoEmbalagem) { config.tipoEmbalagem = autoDetectarEmbalagem(p.nome); alterou = true; }
+    if (!config.modeloCaixa) { config.modeloCaixa = 'A'; alterou = true; }
     if (!config.embalagemPorCaixa || isNaN(parseInt(config.embalagemPorCaixa))) {
-      config.embalagemPorCaixa = p.pacotesPorVolume || 25;
-      alterou = true;
+      config.embalagemPorCaixa = p.pacotesPorVolume || 25; alterou = true;
     }
   });
-  if (alterou) {
-    setData(STORAGE_KEYS.produtos, state.produtos);
-    salvarInsumos();
-  }
+  if (alterou) { setData(STORAGE_KEYS.produtos, state.produtos); salvarInsumos(); }
 }
 
 // ===== PEDIDO DE CARGA PERSISTENTE =====
-function salvarPedidoCarga() {
-  setData(STORAGE_KEYS.pedidoCarga, state.pedidoCargaAtual);
-}
+function salvarPedidoCarga() { setData(STORAGE_KEYS.pedidoCarga, state.pedidoCargaAtual); }
 
 function carregarPedidoCarga() {
   const salvo = getData(STORAGE_KEYS.pedidoCarga, null);
@@ -235,8 +223,7 @@ function carregarPedidoCarga() {
 }
 
 function getReservadoCargaAtual(pid) {
-  return state.carga
-    .filter(c => c.id === pid && c.pedidoCodigo === CARGA_PEDIDO_TAG)
+  return state.carga.filter(c => c.id === pid && c.pedidoCodigo === CARGA_PEDIDO_TAG)
     .reduce((a, c) => a + c.quantidade, 0);
 }
 
@@ -259,11 +246,8 @@ function tentarAutoReservarCarga(pid, shelfId, posicao, quantidadeAdicionada) {
   if (reservar <= 0) return 0;
   state.carga.push({
     uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-    id: pid,
-    quantidade: reservar,
-    prateleira: shelfId,
-    posicao: posicao.toString(),
-    pedidoCodigo: CARGA_PEDIDO_TAG
+    id: pid, quantidade: reservar, prateleira: shelfId,
+    posicao: posicao.toString(), pedidoCodigo: CARGA_PEDIDO_TAG
   });
   return reservar;
 }
@@ -293,18 +277,11 @@ function salvarEstadoParaUndo() {
 function desfazer() {
   if (state.undoStack.length === 0) { mostrarToast('Nada para desfazer', 'info'); return; }
   const s = state.undoStack.pop();
-  state.produtos = s.produtos;
-  state.prateleiras = s.prateleiras;
-  state.carga = s.carga;
-  state.historico = s.historico;
-  state.insumos = s.insumos;
-  state.configInsumos = s.configInsumos;
+  state.produtos = s.produtos; state.prateleiras = s.prateleiras; state.carga = s.carga;
+  state.historico = s.historico; state.insumos = s.insumos; state.configInsumos = s.configInsumos;
   state.produtoInsumoMap = s.produtoInsumoMap;
-  state.pedidosSeparar = s.pedidosSeparar;
-  state.pedidosFinalizados = s.pedidosFinalizados;
-  state.injecao = s.injecao;
-  state.injetando = s.injetando;
-  state.injetados = s.injetados;
+  state.pedidosSeparar = s.pedidosSeparar; state.pedidosFinalizados = s.pedidosFinalizados;
+  state.injecao = s.injecao; state.injetando = s.injetando; state.injetados = s.injetados;
   state.materiaPrima = s.materiaPrima;
   if (s.pedidoCargaAtual) state.pedidoCargaAtual = s.pedidoCargaAtual;
   saveData(); salvarInsumos(); salvarPedidoCarga();
@@ -375,8 +352,7 @@ function carregarDados() {
   state.carga = state.carga.map(item => ({
     uid: item.uid || ('c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
     id: item.id, quantidade: item.quantidade || 0,
-    prateleira: item.prateleira || null,
-    posicao: item.posicao || null,
+    prateleira: item.prateleira || null, posicao: item.posicao || null,
     pedidoCodigo: item.pedidoCodigo || null
   }));
 
@@ -635,37 +611,24 @@ function carregarInsumos() {
 function calcularInsumosNecessarios(produtoId, quantidadeCaixas) {
   const produto = state.produtos.find(p => p.id === produtoId);
   if (!produto) return { caixas: 0, embalagens: 0, modeloCaixa: 'A', embalagemPorCaixa: 0, usa40x50: false };
-
   const config = state.produtoInsumoMap[produtoId] || { modeloCaixa: 'A', embalagemPorCaixa: 25, tipoEmbalagem: 'individual' };
   let embalagemPorCaixa = parseInt(config.embalagemPorCaixa);
   if (isNaN(embalagemPorCaixa) || embalagemPorCaixa <= 0) embalagemPorCaixa = 25;
-
   const usa40 = usaEmbalagem40x50(produto);
-
   return {
     caixas: quantidadeCaixas,
     modeloCaixa: config.modeloCaixa || 'A',
     embalagens: quantidadeCaixas * embalagemPorCaixa,
-    embalagemPorCaixa,
-    usa40x50: usa40
+    embalagemPorCaixa, usa40x50: usa40
   };
 }
 
 function descontarInsumos(produtoId, quantidadeCaixas) {
   const n = calcularInsumosNecessarios(produtoId, quantidadeCaixas);
-
-  if (n.modeloCaixa === 'B') {
-    state.insumos.caixaModeloB = Math.max(0, state.insumos.caixaModeloB - n.caixas);
-  } else {
-    state.insumos.caixaModeloA = Math.max(0, state.insumos.caixaModeloA - n.caixas);
-  }
-
-  if (n.usa40x50) {
-    state.insumos.embalagem40x50 = Math.max(0, (state.insumos.embalagem40x50 || 0) - n.embalagens);
-  } else {
-    state.insumos.embalagens[produtoId] = Math.max(0, (state.insumos.embalagens[produtoId] || 0) - n.embalagens);
-  }
-
+  if (n.modeloCaixa === 'B') state.insumos.caixaModeloB = Math.max(0, state.insumos.caixaModeloB - n.caixas);
+  else state.insumos.caixaModeloA = Math.max(0, state.insumos.caixaModeloA - n.caixas);
+  if (n.usa40x50) state.insumos.embalagem40x50 = Math.max(0, (state.insumos.embalagem40x50 || 0) - n.embalagens);
+  else state.insumos.embalagens[produtoId] = Math.max(0, (state.insumos.embalagens[produtoId] || 0) - n.embalagens);
   salvarInsumos();
   verificarAlertasInsumos();
   return n;
@@ -673,38 +636,24 @@ function descontarInsumos(produtoId, quantidadeCaixas) {
 
 function devolverInsumos(produtoId, quantidadeCaixas) {
   const n = calcularInsumosNecessarios(produtoId, quantidadeCaixas);
-
   if (n.modeloCaixa === 'B') state.insumos.caixaModeloB += n.caixas;
   else state.insumos.caixaModeloA += n.caixas;
-
-  if (n.usa40x50) {
-    state.insumos.embalagem40x50 = (state.insumos.embalagem40x50 || 0) + n.embalagens;
-  } else {
-    state.insumos.embalagens[produtoId] = (state.insumos.embalagens[produtoId] || 0) + n.embalagens;
-  }
-
+  if (n.usa40x50) state.insumos.embalagem40x50 = (state.insumos.embalagem40x50 || 0) + n.embalagens;
+  else state.insumos.embalagens[produtoId] = (state.insumos.embalagens[produtoId] || 0) + n.embalagens;
   salvarInsumos();
 }
 
 function verificarInsumosSuficientes(produtoId, quantidadeCaixas) {
   const n = calcularInsumosNecessarios(produtoId, quantidadeCaixas);
-
   const dispCx = n.modeloCaixa === 'B' ? state.insumos.caixaModeloB : state.insumos.caixaModeloA;
   const caixasSuf = dispCx >= n.caixas;
-
   let dispEmb, embSuf;
-  if (n.usa40x50) {
-    dispEmb = state.insumos.embalagem40x50 || 0;
-  } else {
-    dispEmb = state.insumos.embalagens[produtoId] || 0;
-  }
+  if (n.usa40x50) dispEmb = state.insumos.embalagem40x50 || 0;
+  else dispEmb = state.insumos.embalagens[produtoId] || 0;
   embSuf = dispEmb >= n.embalagens;
-
   return {
-    caixasSuficientes: caixasSuf,
-    embalagensSuficientes: embSuf,
-    usa40x50: n.usa40x50,
-    necessario: n,
+    caixasSuficientes: caixasSuf, embalagensSuficientes: embSuf,
+    usa40x50: n.usa40x50, necessario: n,
     disponivel: { caixas: dispCx, embalagens: dispEmb }
   };
 }
@@ -714,14 +663,12 @@ function verificarAlertasInsumos() {
   if (state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA) alertas.push(`📦 Caixa A: ${state.insumos.caixaModeloA}`);
   if (state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB) alertas.push(`📦 Caixa B: ${state.insumos.caixaModeloB}`);
   if ((state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50) alertas.push(`🛍️ 40x50: ${state.insumos.embalagem40x50 || 0}`);
-
   state.produtos.forEach(p => {
     if (usaEmbalagem40x50(p)) return;
     const q = state.insumos.embalagens[p.id] || 0;
     const a = state.configInsumos.alertaEmbalagemPorProduto?.[p.id] !== undefined ? state.configInsumos.alertaEmbalagemPorProduto[p.id] : state.configInsumos.alertaEmbalagemPadrao;
     if (q <= a) alertas.push(`📦 ${p.nome}: ${q} emb`);
   });
-
   const banner = document.getElementById('alertaInsumosBanner');
   if (banner) {
     if (alertas.length > 0) {
@@ -739,34 +686,14 @@ function abrirModalInsumos() {
     const alerta = state.configInsumos.alertaEmbalagemPorProduto?.[p.id] !== undefined ? state.configInsumos.alertaEmbalagemPorProduto[p.id] : state.configInsumos.alertaEmbalagemPadrao;
     const usa40 = config.tipoEmbalagem === '40x50';
     const estoqueIndividual = state.insumos.embalagens[p.id] || 0;
-
     linhas += `
       <tr>
-        <td>
-          <div class="insumo-nome">${p.nome}</div>
-          <div class="insumo-codigo">${p.codigoInterno || '-'}</div>
-        </td>
-        <td>
-          <select data-pid="${p.id}" data-field="modeloCaixa" class="input-insumo-modal select-insumo">
-            <option value="A" ${config.modeloCaixa === 'A' ? 'selected' : ''}>A</option>
-            <option value="B" ${config.modeloCaixa === 'B' ? 'selected' : ''}>B</option>
-          </select>
-        </td>
-        <td>
-          <select data-pid="${p.id}" data-field="tipoEmbalagem" class="input-insumo-modal select-insumo" style="width:90px;">
-            <option value="individual" ${!usa40 ? 'selected' : ''}>Individual</option>
-            <option value="40x50" ${usa40 ? 'selected' : ''}>40x50</option>
-          </select>
-        </td>
-        <td>
-          <input type="number" data-pid="${p.id}" data-field="embalagemPorCaixa" class="input-insumo-modal input-insumo" value="${config.embalagemPorCaixa}" min="1">
-        </td>
-        <td>
-          <input type="number" data-pid="${p.id}" data-field="estoque" class="input-insumo-modal input-insumo" value="${estoqueIndividual}" min="0" ${usa40 ? 'disabled' : ''} style="width:80px;">
-        </td>
-        <td>
-          <input type="number" data-pid="${p.id}" data-field="alerta" class="input-insumo-modal input-insumo" value="${alerta}" min="0" ${usa40 ? 'disabled' : ''}>
-        </td>
+        <td><div class="insumo-nome">${p.nome}</div><div class="insumo-codigo">${p.codigoInterno || '-'}</div></td>
+        <td><select data-pid="${p.id}" data-field="modeloCaixa" class="input-insumo-modal select-insumo"><option value="A" ${config.modeloCaixa === 'A' ? 'selected' : ''}>A</option><option value="B" ${config.modeloCaixa === 'B' ? 'selected' : ''}>B</option></select></td>
+        <td><select data-pid="${p.id}" data-field="tipoEmbalagem" class="input-insumo-modal select-insumo" style="width:90px;"><option value="individual" ${!usa40 ? 'selected' : ''}>Individual</option><option value="40x50" ${usa40 ? 'selected' : ''}>40x50</option></select></td>
+        <td><input type="number" data-pid="${p.id}" data-field="embalagemPorCaixa" class="input-insumo-modal input-insumo" value="${config.embalagemPorCaixa}" min="1"></td>
+        <td><input type="number" data-pid="${p.id}" data-field="estoque" class="input-insumo-modal input-insumo" value="${estoqueIndividual}" min="0" ${usa40 ? 'disabled' : ''} style="width:80px;"></td>
+        <td><input type="number" data-pid="${p.id}" data-field="alerta" class="input-insumo-modal input-insumo" value="${alerta}" min="0" ${usa40 ? 'disabled' : ''}></td>
       </tr>`;
   });
 
@@ -774,48 +701,27 @@ function abrirModalInsumos() {
     <div>
       <div class="modal-block modal-block-primary">
         <h4 style="color:#3498db;">📦 CAIXA MODELO A</h4>
-        <label>Estoque:</label>
-        <input type="number" id="editCaixaModeloA" value="${state.insumos.caixaModeloA}" min="0">
-        <label>Alerta mínimo:</label>
-        <input type="number" id="editAlertaCaixaA" value="${state.configInsumos.alertaCaixaModeloA}" min="0">
+        <label>Estoque:</label><input type="number" id="editCaixaModeloA" value="${state.insumos.caixaModeloA}" min="0">
+        <label>Alerta mínimo:</label><input type="number" id="editAlertaCaixaA" value="${state.configInsumos.alertaCaixaModeloA}" min="0">
       </div>
-
       <div class="modal-block" style="background:var(--bg-subtle);border-left:4px solid #e67e22;">
         <h4 style="color:#e67e22;">📦 CAIXA MODELO B</h4>
-        <label>Estoque:</label>
-        <input type="number" id="editCaixaModeloB" value="${state.insumos.caixaModeloB}" min="0">
-        <label>Alerta mínimo:</label>
-        <input type="number" id="editAlertaCaixaB" value="${state.configInsumos.alertaCaixaModeloB}" min="0">
+        <label>Estoque:</label><input type="number" id="editCaixaModeloB" value="${state.insumos.caixaModeloB}" min="0">
+        <label>Alerta mínimo:</label><input type="number" id="editAlertaCaixaB" value="${state.configInsumos.alertaCaixaModeloB}" min="0">
       </div>
-
       <div class="modal-block modal-block-purple">
         <h4 style="color:var(--purple);">🛍️ EMBALAGEM 40x50</h4>
-        <label>Estoque:</label>
-        <input type="number" id="editEmbalagem40x50" value="${state.insumos.embalagem40x50 || 0}" min="0">
-        <label>Alerta mínimo:</label>
-        <input type="number" id="editAlerta40x50" value="${state.configInsumos.alertaEmbalagem40x50}" min="0">
+        <label>Estoque:</label><input type="number" id="editEmbalagem40x50" value="${state.insumos.embalagem40x50 || 0}" min="0">
+        <label>Alerta mínimo:</label><input type="number" id="editAlerta40x50" value="${state.configInsumos.alertaEmbalagem40x50}" min="0">
       </div>
-
       <div class="modal-block modal-block-info">
         <h4 style="color:var(--text);">📋 Configuração por Produto</h4>
         <div style="max-height:400px;overflow-y:auto;" class="insumos-tabela-wrap">
           <table class="insumos-tabela">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Produto</th>
-                <th>Caixa</th>
-                <th>Embalagem</th>
-                <th>Emb/cx</th>
-                <th>Estoque</th>
-                <th>Alerta</th>
-              </tr>
-            </thead>
+            <thead><tr><th style="text-align:left;">Produto</th><th>Caixa</th><th>Embalagem</th><th>Emb/cx</th><th>Estoque</th><th>Alerta</th></tr></thead>
             <tbody>${linhas}</tbody>
           </table>
         </div>
-        <small style="color:var(--text-muted);font-size:11px;display:block;margin-top:8px;">
-          💡 Produtos com "Embalagem = 40x50" consomem do estoque compartilhado. Os campos Estoque/Alerta ficam desabilitados.
-        </small>
       </div>
     </div>`;
 
@@ -823,10 +729,8 @@ function abrirModalInsumos() {
     sel.addEventListener('change', function() {
       const linha = this.closest('tr');
       const is40 = this.value === '40x50';
-      const inputEstoque = linha.querySelector('input[data-field="estoque"]');
-      const inputAlerta = linha.querySelector('input[data-field="alerta"]');
-      inputEstoque.disabled = is40;
-      inputAlerta.disabled = is40;
+      linha.querySelector('input[data-field="estoque"]').disabled = is40;
+      linha.querySelector('input[data-field="alerta"]').disabled = is40;
     });
   });
 
@@ -840,11 +744,9 @@ function salvarModalInsumos() {
   const aA = parseInt(document.getElementById('editAlertaCaixaA').value);
   const aB = parseInt(document.getElementById('editAlertaCaixaB').value);
   const a40 = parseInt(document.getElementById('editAlerta40x50').value);
-
   if ([cA, cB, e40, aA, aB, a40].some(v => isNaN(v) || v < 0)) {
     mostrarToast('❌ Valores inválidos!', 'error'); return;
   }
-
   salvarEstadoParaUndo();
   state.insumos.caixaModeloA = cA;
   state.insumos.caixaModeloB = cB;
@@ -860,19 +762,13 @@ function salvarModalInsumos() {
       state.produtoInsumoMap[pid] = { modeloCaixa: 'A', embalagemPorCaixa: 25, tipoEmbalagem: 'individual' };
     }
     const config = state.produtoInsumoMap[pid];
-
-    if (field === 'modeloCaixa') {
-      config.modeloCaixa = el.value;
-    } else if (field === 'tipoEmbalagem') {
-      config.tipoEmbalagem = el.value;
-    } else if (field === 'embalagemPorCaixa') {
+    if (field === 'modeloCaixa') config.modeloCaixa = el.value;
+    else if (field === 'tipoEmbalagem') config.tipoEmbalagem = el.value;
+    else if (field === 'embalagemPorCaixa') {
       const v = parseInt(el.value);
       config.embalagemPorCaixa = isNaN(v) ? 25 : Math.max(1, v);
     } else if (field === 'estoque') {
-      if (!el.disabled) {
-        const v = parseInt(el.value);
-        state.insumos.embalagens[pid] = isNaN(v) ? 0 : Math.max(0, v);
-      }
+      if (!el.disabled) { const v = parseInt(el.value); state.insumos.embalagens[pid] = isNaN(v) ? 0 : Math.max(0, v); }
     } else if (field === 'alerta') {
       if (!el.disabled) {
         const v = parseInt(el.value);
@@ -883,9 +779,7 @@ function salvarModalInsumos() {
   });
 
   state.produtos.forEach(p => {
-    if (usaEmbalagem40x50(p) && state.insumos.embalagens[p.id] === undefined) {
-      state.insumos.embalagens[p.id] = 0;
-    }
+    if (usaEmbalagem40x50(p) && state.insumos.embalagens[p.id] === undefined) state.insumos.embalagens[p.id] = 0;
   });
 
   salvarInsumos();
@@ -901,19 +795,15 @@ function closeModalInsumos() { document.getElementById('modalInsumos').style.dis
 function renderizarInsumos() {
   const container = document.getElementById('insumosContainer');
   if (!container) return;
-
   let linhasProdutos = '';
   state.produtos.forEach(p => {
     const config = state.produtoInsumoMap[p.id] || { modeloCaixa: 'A', embalagemPorCaixa: 25, tipoEmbalagem: 'individual' };
     const usa40 = usaEmbalagem40x50(p);
     const q = usa40 ? (state.insumos.embalagem40x50 || 0) : (state.insumos.embalagens[p.id] || 0);
-    const alerta = usa40
-      ? state.configInsumos.alertaEmbalagem40x50
+    const alerta = usa40 ? state.configInsumos.alertaEmbalagem40x50
       : (state.configInsumos.alertaEmbalagemPorProduto?.[p.id] !== undefined ? state.configInsumos.alertaEmbalagemPorProduto[p.id] : state.configInsumos.alertaEmbalagemPadrao);
     const baixo = q <= alerta;
-    const badge40 = usa40
-      ? '<span class="badge-emb-40x50">🛍️ 40x50</span>'
-      : '<span class="badge-emb-individual">INDIV</span>';
+    const badge40 = usa40 ? '<span class="badge-emb-40x50">🛍️ 40x50</span>' : '<span class="badge-emb-individual">INDIV</span>';
     linhasProdutos += `
       <tr class="${baixo ? 'baixo' : ''}">
         <td><strong>${p.nome}</strong></td>
@@ -938,41 +828,27 @@ function renderizarInsumos() {
           <button class="btn btn-info btn-md" onclick="exportarInsumosPDF()">📄 Exportar PDF</button>
         </div>
       </div>
-
       <div class="insumos-cards">
         <div class="insumo-card caixa-a ${alertaA ? 'baixo' : ''}">
-          <div class="insumo-icon">📦</div>
-          <div class="insumo-valor">${state.insumos.caixaModeloA}</div>
+          <div class="insumo-icon">📦</div><div class="insumo-valor">${state.insumos.caixaModeloA}</div>
           <div class="insumo-label">Caixas Modelo A</div>
           ${alertaA ? '<div class="insumo-alerta-baixo">⚠️ BAIXO!</div>' : ''}
         </div>
         <div class="insumo-card caixa-b ${alertaB ? 'baixo' : ''}">
-          <div class="insumo-icon">📦</div>
-          <div class="insumo-valor">${state.insumos.caixaModeloB}</div>
+          <div class="insumo-icon">📦</div><div class="insumo-valor">${state.insumos.caixaModeloB}</div>
           <div class="insumo-label">Caixas Modelo B</div>
           ${alertaB ? '<div class="insumo-alerta-baixo">⚠️ BAIXO!</div>' : ''}
         </div>
         <div class="insumo-card embalagem-40x50 ${alerta40 ? 'baixo' : ''}">
-          <div class="insumo-icon">🛍️</div>
-          <div class="insumo-valor">${state.insumos.embalagem40x50 || 0}</div>
+          <div class="insumo-icon">🛍️</div><div class="insumo-valor">${state.insumos.embalagem40x50 || 0}</div>
           <div class="insumo-label">Embalagem 40x50</div>
           ${alerta40 ? '<div class="insumo-alerta-baixo">⚠️ BAIXO!</div>' : ''}
         </div>
       </div>
-
       <h4 style="color:var(--text);margin:0 0 10px 0;">📋 Configuração por Produto (${state.produtos.length})</h4>
       <div class="insumos-tabela-wrap">
         <table class="insumos-tabela">
-          <thead>
-            <tr>
-              <th style="text-align:left;">Produto</th>
-              <th>Caixa</th>
-              <th>Embalagem</th>
-              <th>Emb/cx</th>
-              <th>Estoque</th>
-              <th>Alerta</th>
-            </tr>
-          </thead>
+          <thead><tr><th style="text-align:left;">Produto</th><th>Caixa</th><th>Embalagem</th><th>Emb/cx</th><th>Estoque</th><th>Alerta</th></tr></thead>
           <tbody>${linhasProdutos || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">Nenhum produto.</td></tr>'}</tbody>
         </table>
       </div>
@@ -990,7 +866,6 @@ function renderPosicaoOcupada(shelf, posNum, pos) {
   const cardClass = reservado > 0 ? 'reservado' : '';
   const corFundo = pos.cor && pos.cor !== '#FFFFFF' && pos.cor !== '#ffffff' ? `style="background:${pos.cor};"` : '';
   const corBorda = shelf.cor ? `style="border-color:${shelf.cor};"` : '';
-
   return `
     <div class="position-card ${cardClass}" ${corFundo} ${corBorda}>
       <div class="position-number">Posição ${posNum}</div>
@@ -1026,13 +901,10 @@ function renderPrateleira(shelf) {
   const div = document.createElement('div');
   div.className = 'shelf';
   if (shelf.cor) div.style.borderLeft = `5px solid ${shelf.cor}`;
-
   const n = shelf.numPosicoes || 12;
   let posHtml = '';
   for (let i = 1; i <= n; i++) posHtml += renderPosicao(shelf, i);
-
   const codigoHtml = shelf.codigoBarras ? `<span class="shelf-title-code">(${shelf.codigoBarras})</span>` : '';
-
   div.innerHTML = `
     <div class="shelf-header">
       <h2 class="shelf-title">📦 ${shelf.nome} ${codigoHtml}</h2>
@@ -1094,21 +966,12 @@ function removerPosicaoPrateleira(shelfId) {
   const total = shelf.numPosicoes || 12;
   const ocupadas = shelf.produtos.map(p => parseInt(p.posicao));
   const maiorOcupada = ocupadas.length > 0 ? Math.max(...ocupadas) : 0;
-  const resp = prompt(
-    `Remover posições da prateleira "${shelf.nome}"\n\n` +
-    `Total atual: ${total} posições\n` +
-    `Última posição com produto: ${maiorOcupada || 'nenhuma'}\n\n` +
-    `Quantas posições deseja remover do final?`,
-    '1'
-  );
+  const resp = prompt(`Remover posições da prateleira "${shelf.nome}"\n\nTotal atual: ${total} posições\nÚltima posição com produto: ${maiorOcupada || 'nenhuma'}\n\nQuantas posições deseja remover do final?`, '1');
   if (resp === null) return;
   const qtd = parseInt(resp);
   if (isNaN(qtd) || qtd <= 0) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
   if (qtd >= total) { mostrarToast('❌ Não é possível remover todas as posições!', 'error'); return; }
-  if (total - qtd < maiorOcupada) {
-    mostrarToast(`❌ Há produtos na(s) posição(ões) ${maiorOcupada}. Mova-os antes.`, 'error');
-    return;
-  }
+  if (total - qtd < maiorOcupada) { mostrarToast(`❌ Há produtos na(s) posição(ões) ${maiorOcupada}. Mova-os antes.`, 'error'); return; }
   salvarEstadoParaUndo();
   shelf.numPosicoes = total - qtd;
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
@@ -1135,14 +998,12 @@ function editarNomePrateleira(id) {
   const novoId = novoNome.trim().toUpperCase();
   const idAntigo = shelf.id;
   if (novoId !== idAntigo && state.prateleiras.some(s => s.id === novoId)) {
-    mostrarToast('❌ Já existe uma prateleira com esse nome!', 'error');
-    return;
+    mostrarToast('❌ Já existe uma prateleira com esse nome!', 'error'); return;
   }
   const codigo = prompt('Novo código de barras:', shelf.codigoBarras || gerarCodigoPrateleira(novoId));
   const numStr = prompt('Nova quantidade de posições (deixe em branco para manter):', shelf.numPosicoes || 12);
   salvarEstadoParaUndo();
-  shelf.id = novoId;
-  shelf.nome = novoId;
+  shelf.id = novoId; shelf.nome = novoId;
   if (codigo) shelf.codigoBarras = codigo;
   if (numStr !== null && numStr.trim() !== '') {
     const n = parseInt(numStr);
@@ -1401,7 +1262,6 @@ function cadastrarProdutoBanco() {
   };
   state.produtos.push(novo);
   setData(STORAGE_KEYS.produtos, state.produtos);
-
   state.insumos.embalagens[novo.id] = 0;
   state.produtoInsumoMap[novo.id] = {
     modeloCaixa: 'A',
@@ -1409,7 +1269,6 @@ function cadastrarProdutoBanco() {
     tipoEmbalagem: autoDetectarEmbalagem(nome)
   };
   salvarInsumos();
-
   carregarProdutos();
   atualizarSelects();
   mostrarToast('✅ Produto cadastrado!', 'success');
@@ -1434,13 +1293,10 @@ function carregarProdutos() {
 function editarProduto(id) {
   const p = state.produtos.find(x => x.id === id);
   if (!p) return;
-
   const config = state.produtoInsumoMap[id] || { modeloCaixa: 'A', embalagemPorCaixa: p.pacotesPorVolume || 25, tipoEmbalagem: autoDetectarEmbalagem(p.nome) };
-
   const injecaoOptions = ['<option value="">(nenhum - não desconta)</option>']
     .concat(state.injecao.map(i => `<option value="${i.nome}" ${p.injecaoVinculo === i.nome ? 'selected' : ''}>${i.nome} (${i.codigoExtra})</option>`))
     .join('');
-
   const isKit = (p.nome || '').toLowerCase().includes('kit');
 
   document.getElementById('modalTitle').textContent = '✏️ Editar Produto';
@@ -1453,7 +1309,6 @@ function editarProduto(id) {
       <input type="text" id="editProdBarcode" value="${p.barcode || ''}" style="flex:1;">
       <button class="btn btn-info btn-md" type="button" onclick="abrirCameraParaCampo('editProdBarcode')">📷</button>
     </div>
-
     <div class="modal-block modal-block-primary">
       <label style="font-weight:bold;">📦 Modelo da Caixa</label>
       <select id="editProdModeloCaixa">
@@ -1462,7 +1317,6 @@ function editarProduto(id) {
       </select>
       <small class="form-hint">A caixa é sempre debitada quando o produto é adicionado à prateleira.</small>
     </div>
-
     <div class="modal-block modal-block-purple">
       <label style="font-weight:bold;">🛍️ Tipo de Embalagem Interna</label>
       <select id="editProdTipoEmbalagem">
@@ -1471,18 +1325,12 @@ function editarProduto(id) {
       </select>
       <small class="form-hint">Padrão automático: termina em <strong>-500</strong>, <strong>-200</strong> ou é <strong>Kit</strong> → usa 40x50.</small>
     </div>
-
     <div class="modal-block modal-block-warning">
       <label style="font-weight:bold;">💉 Injetado vinculado (para desconto automático)</label>
       ${isKit
-        ? `<div class="info-box">
-            <strong>Kit</strong> desconta automaticamente:<br>
-            • 1× C2N por caixa<br>
-            • 0.2× CUNHA(V) por caixa (5 Kit = 1 Cunha)
-          </div>`
+        ? `<div class="info-box"><strong>Kit</strong> desconta automaticamente:<br>• 1× C2N por caixa<br>• 0.2× CUNHA(V) por caixa (5 Kit = 1 Cunha)</div>`
         : `<select id="editProdInjecaoVinculo">${injecaoOptions}</select>`}
-    </div>
-  `;
+    </div>`;
 
   state.currentEdit = { produtoId: id };
   state.modalType = 'editarProduto';
@@ -1493,15 +1341,11 @@ function salvarEdicaoProduto() {
   const id = state.currentEdit.produtoId;
   const p = state.produtos.find(x => x.id === id);
   if (!p) return;
-
   const novoCodigo = document.getElementById('editProdCodigo').value.trim().toUpperCase();
   if (novoCodigo && novoCodigo !== p.codigoInterno && state.produtos.some(x => x.id !== id && x.codigoInterno === novoCodigo)) {
-    mostrarToast('⚠️ Já existe outro produto com esse código!', 'warning');
-    return;
+    mostrarToast('⚠️ Já existe outro produto com esse código!', 'warning'); return;
   }
-
   salvarEstadoParaUndo();
-
   const novoPac = parseInt(document.getElementById('editProdPacotes').value) || 50;
   p.nome = document.getElementById('editProdNome').value.trim();
   p.codigoInterno = novoCodigo;
@@ -1519,13 +1363,10 @@ function salvarEdicaoProduto() {
   }
   const config = state.produtoInsumoMap[id];
   config.embalagemPorCaixa = novoPac;
-
   const selMod = document.getElementById('editProdModeloCaixa');
   if (selMod) config.modeloCaixa = selMod.value;
-
   const selEmb = document.getElementById('editProdTipoEmbalagem');
   if (selEmb) config.tipoEmbalagem = selEmb.value;
-
   if (state.insumos.embalagens[id] === undefined) state.insumos.embalagens[id] = 0;
 
   setData(STORAGE_KEYS.produtos, state.produtos);
@@ -1581,7 +1422,6 @@ function adicionarProdutoExistente() {
   const shelf = state.prateleiras.find(s => s.id === sid);
   if (!produto || !shelf) return;
   if (shelf.produtos.some(p => p.posicao === pos)) { mostrarToast('❌ Posição ocupada!', 'error'); return; }
-
   const ins = verificarInsumosSuficientes(pid, q);
   if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
     let m = `⚠️ INSUMOS INSUFICIENTES para "${produto.nome}"!\n\n`;
@@ -1594,18 +1434,15 @@ function adicionarProdutoExistente() {
   shelf.produtos.push({ id: pid, posicao: pos, quantidade: q, cor: '#FFFFFF', modeloCaixa: desc.modeloCaixa });
   produto.quantidade = (produto.quantidade || 0) + q;
   descontarInjetadosPorFamilia(produto, q);
-
   const resAuto = tentarAutoReservarCarga(pid, sid, pos, q);
   if (resAuto > 0) {
     setData(STORAGE_KEYS.carga, state.carga);
     salvarPedidoCarga();
     registrarHistorico(produto.nome, 'Auto-reserva para Carga', resAuto, `${shelf.nome}-${pos} | Pedido: ${state.pedidoCargaAtual.codigo}`);
   }
-
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
   setData(STORAGE_KEYS.produtos, state.produtos);
-  registrarHistorico(produto.nome, 'Endereçamento', q,
-    `${shelf.nome}-${pos} | Caixa ${desc.modeloCaixa}: -${desc.caixas} | ${desc.usa40x50 ? '40x50' : 'Emb'}: -${desc.embalagens}`);
+  registrarHistorico(produto.nome, 'Endereçamento', q, `${shelf.nome}-${pos} | Caixa ${desc.modeloCaixa}: -${desc.caixas} | ${desc.usa40x50 ? '40x50' : 'Emb'}: -${desc.embalagens}`);
   atualizarTudo();
   mostrarToast('✅ Adicionado! Insumos descontados.', 'success');
 }
@@ -1642,9 +1479,7 @@ function adicionarCarga(shelfId, produtoId, posicao) {
   if (!s) return;
   const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
   if (!p) return;
-  const reservado = state.carga
-    .filter(c => c.id === produtoId && c.prateleira === shelfId && c.posicao === posicao)
-    .reduce((a, c) => a + c.quantidade, 0);
+  const reservado = state.carga.filter(c => c.id === produtoId && c.prateleira === shelfId && c.posicao === posicao).reduce((a, c) => a + c.quantidade, 0);
   const disp = p.quantidade - reservado;
   if (disp <= 0) { mostrarToast('❌ Sem disponível!', 'error'); return; }
   const q = prompt(`Quantos "${produto.nome}" reservar? (Disponível: ${disp} cx)`, '1');
@@ -1654,8 +1489,7 @@ function adicionarCarga(shelfId, produtoId, posicao) {
   salvarEstadoParaUndo();
   state.carga.push({
     uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-    id: produtoId, quantidade: qn, prateleira: shelfId, posicao: posicao,
-    pedidoCodigo: null
+    id: produtoId, quantidade: qn, prateleira: shelfId, posicao: posicao, pedidoCodigo: null
   });
   setData(STORAGE_KEYS.carga, state.carga);
   atualizarTudo();
@@ -1667,16 +1501,10 @@ function adicionarTodosCarga() {
   state.prateleiras.forEach(s => {
     s.produtos.forEach(p => {
       if (p.quantidade > 0) {
-        const res = state.carga
-          .filter(c => c.id === p.id && c.prateleira === s.id && c.posicao === p.posicao)
-          .reduce((a, c) => a + c.quantidade, 0);
+        const res = state.carga.filter(c => c.id === p.id && c.prateleira === s.id && c.posicao === p.posicao).reduce((a, c) => a + c.quantidade, 0);
         const disp = p.quantidade - res;
         if (disp > 0) {
-          state.carga.push({
-            uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-            id: p.id, quantidade: disp, prateleira: s.id, posicao: p.posicao,
-            pedidoCodigo: null
-          });
+          state.carga.push({ uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), id: p.id, quantidade: disp, prateleira: s.id, posicao: p.posicao, pedidoCodigo: null });
         }
       }
     });
@@ -1768,38 +1596,118 @@ function carregarCarga() {
   document.getElementById('totalCargaItens').textContent = total;
 }
 
-// ===== LEITOR DE PEDIDOS =====
-function extrairCodigoEQuantidade(valor) {
-  let codigo = valor.trim().toUpperCase();
-  let qtd = 1;
-  for (const sep of [':', 'X', '*']) {
-    if (codigo.includes(sep)) {
-      const partes = codigo.split(sep);
-      codigo = partes[0].trim();
-      const q = parseInt(partes[1].trim());
-      if (!isNaN(q) && q > 0) qtd = q;
-      break;
-    }
+// ===== LEITOR DE PEDIDOS (MELHORADO) =====
+function extrairCodigoEQuantidade(valorBruto) {
+  let valor = String(valorBruto || '').trim();
+  if (!valor) return { codigo: '', quantidade: 1, formato: '' };
+
+  // Normaliza espaços múltiplos em um só
+  valor = valor.replace(/\s+/g, ' ').trim();
+
+  // ===== FORMATO EXTERNO =====
+  // "50,00 pct cepep15-500" ou "50 pct CPEP15-500" ou "50 un CPEP15-500"
+  const regexExterno = /^(\d+(?:[.,]\d+)?)\s*(?:pct|pcts|un|uns|cx|pc|pcs|unid|unids|unidade|unidades)\s+(.+)$/i;
+  const m1 = valor.match(regexExterno);
+  if (m1) {
+    let q = parseFloat(m1[1].replace(',', '.'));
+    if (isNaN(q) || q <= 0) q = 1;
+    return {
+      codigo: m1[2].trim().toUpperCase(),
+      quantidade: Math.round(q),
+      formato: 'externo'
+    };
   }
-  return { codigo, quantidade: qtd };
+
+  // ===== FORMATO INTERNO =====
+  // "cp1-100:50" ou "cp1-100X50" ou "cp1-100*50"
+  const regexInterno = /^(.+?)[:\*xX](\d+)$/;
+  const m2 = valor.match(regexInterno);
+  if (m2) {
+    const q = parseInt(m2[2]);
+    return {
+      codigo: m2[1].trim().toUpperCase(),
+      quantidade: !isNaN(q) && q > 0 ? q : 1,
+      formato: 'interno'
+    };
+  }
+
+  // ===== FORMATO "numero + codigo" (sem palavra-chave) =====
+  // "50 cepep15-500"
+  const regexNumCod = /^(\d+(?:[.,]\d+)?)\s+([a-zA-Z][\w\-.,]*)$/;
+  const m3 = valor.match(regexNumCod);
+  if (m3) {
+    let q = parseFloat(m3[1].replace(',', '.'));
+    if (isNaN(q) || q <= 0) q = 1;
+    return {
+      codigo: m3[2].trim().toUpperCase(),
+      quantidade: Math.round(q),
+      formato: 'externo-simples'
+    };
+  }
+
+  // ===== FALLBACK: apenas o código, sem quantidade =====
+  return {
+    codigo: valor.toUpperCase(),
+    quantidade: 1,
+    formato: 'codigo'
+  };
 }
 
 function adicionarCodigoLido() {
   const input = document.getElementById('codigoLido');
-  const { codigo, quantidade } = extrairCodigoEQuantidade(input.value);
-  if (!codigo) { mostrarToast('❌ Digite um código!', 'error'); return; }
-  const produto = state.produtos.find(p => (p.codigoInterno && p.codigoInterno.toUpperCase() === codigo) || (p.barcode && p.barcode.toUpperCase() === codigo));
+  if (!input) return;
+  const valorOriginal = input.value;
+  if (!valorOriginal.trim()) { mostrarToast('❌ Digite ou escaneie um código!', 'error'); return; }
+
+  const { codigo, quantidade, formato } = extrairCodigoEQuantidade(valorOriginal);
+  if (!codigo) { mostrarToast('❌ Código inválido!', 'error'); return; }
+
+  // Busca 1: match exato (por código interno OU por barcode)
+  let produto = state.produtos.find(p =>
+    (p.codigoInterno && p.codigoInterno.toUpperCase() === codigo) ||
+    (p.barcode && p.barcode.toUpperCase() === codigo)
+  );
+
+  // Busca 2: match parcial (se não achou exato, tenta "contém")
+  if (!produto) {
+    produto = state.produtos.find(p => {
+      const ci = (p.codigoInterno || '').toUpperCase();
+      const bc = (p.barcode || '').toUpperCase();
+      if (!ci && !bc) return false;
+      return (ci && ci.includes(codigo)) ||
+             (bc && bc.includes(codigo)) ||
+             (ci && codigo.includes(ci)) ||
+             (bc && codigo.includes(bc));
+    });
+  }
+
   const pac = produto ? (produto.pacotesPorVolume || 50) : 50;
-  if (state.pedidoAtual[codigo]) state.pedidoAtual[codigo].qtd += quantidade;
-  else state.pedidoAtual[codigo] = { codigo, nome: produto ? produto.nome : '❌ Não encontrado', pacotesPorVolume: pac, qtd: quantidade, encontrado: !!produto };
+
+  if (state.pedidoAtual[codigo]) {
+    state.pedidoAtual[codigo].qtd += quantidade;
+  } else {
+    state.pedidoAtual[codigo] = {
+      codigo,
+      nome: produto ? produto.nome : '❌ Não encontrado',
+      pacotesPorVolume: pac,
+      qtd: quantidade,
+      encontrado: !!produto
+    };
+  }
+
   input.value = '';
   input.focus();
   atualizarLeitor();
-  mostrarToast('✅ Adicionado!', 'success');
+
+  if (produto) {
+    mostrarToast(`✅ ${produto.nome} (+${quantidade} pac)`, 'success');
+  } else {
+    mostrarToast(`⚠️ "${codigo}" não cadastrado (qtd ${quantidade})`, 'warning');
+  }
 }
 
 function simularLeitura() {
-  const codigos = ['CP1-100:200', 'PARAF01:50'];
+  const codigos = ['CP1-100:50', '50,00 PCT CPEP15-500', 'CP15-50', 'CPP1-500'];
   document.getElementById('codigoLido').value = codigos[Math.floor(Math.random() * codigos.length)];
   adicionarCodigoLido();
 }
@@ -1812,6 +1720,7 @@ function atualizarLeitor() {
   const resumo = document.getElementById('resumoPedido');
   const detalhamento = document.getElementById('detalhamentoPedido');
   const codigos = Object.keys(state.pedidoAtual);
+
   if (codigos.length === 0) {
     container.innerHTML = '<span style="color:var(--text-muted);">Aguardando códigos...</span>';
     resumo.innerHTML = '<p style="color:var(--text-muted);">Nenhum item</p>';
@@ -1822,23 +1731,27 @@ function atualizarLeitor() {
     document.getElementById('totalProdutosEncontrados').textContent = '0';
     return;
   }
+
   container.innerHTML = codigos.map(cod => {
     const item = state.pedidoAtual[cod];
     const bg = item.encontrado ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
     return `<span style="display:inline-block;padding:6px 12px;border-radius:20px;margin:4px;background:${bg};color:var(--text);">
       ${cod} <strong>${item.qtd}</strong><span onclick="removerItemPedido('${cod}')" style="cursor:pointer;margin-left:6px;color:var(--danger);">✖</span></span>`;
   }).join('');
+
   resumo.innerHTML = codigos.map(cod => {
     const i = state.pedidoAtual[cod];
     const v = Math.floor(i.qtd / i.pacotesPorVolume);
     const s = i.qtd % i.pacotesPorVolume;
     return `<div>${i.encontrado ? '✅' : '❌'} ${cod}: ${i.qtd} pacotes → ${v} caixas${s > 0 ? ` + ${s}` : ''}</div>`;
   }).join('');
+
   detalhamento.innerHTML = `<table><thead><tr><th>Código</th><th>Produto</th><th>Pacotes</th><th>Caixas</th></tr></thead><tbody>
     ${codigos.map(cod => {
       const i = state.pedidoAtual[cod];
       return `<tr><td>${cod}</td><td>${i.nome}</td><td>${i.qtd}</td><td>${Math.floor(i.qtd / i.pacotesPorVolume)}</td></tr>`;
     }).join('')}</tbody></table>`;
+
   let tp = 0, tv = 0, te = 0;
   codigos.forEach(cod => {
     const i = state.pedidoAtual[cod];
@@ -1868,35 +1781,90 @@ function exportarPedido() {
 
 function escanearCodigoPedido() { abrirCameraParaCampo('codigoLido', () => adicionarCodigoLido()); }
 
-// ===== CÂMERA =====
+// ===== CÂMERA (lê QR + código de barras) =====
 let html5QrCodeCamera = null;
 
 function abrirCameraParaCampo(campoId, callback) {
   const container = document.getElementById('cameraContainer');
+  if (!container) { mostrarToast('❌ Container da câmera não encontrado!', 'error'); return; }
+
+  const readerEl = document.getElementById('cameraReader');
+  if (readerEl) readerEl.innerHTML = '';
+
   container.style.display = 'flex';
+
   if (html5QrCodeCamera) {
-    html5QrCodeCamera.stop().then(() => { html5QrCodeCamera.clear(); html5QrCodeCamera = null; iniciarCamera(campoId, callback); }).catch(() => { html5QrCodeCamera = null; iniciarCamera(campoId, callback); });
-  } else iniciarCamera(campoId, callback);
+    html5QrCodeCamera.stop()
+      .then(() => html5QrCodeCamera.clear())
+      .catch(() => {})
+      .finally(() => {
+        html5QrCodeCamera = null;
+        setTimeout(() => iniciarCamera(campoId, callback), 250);
+      });
+  } else {
+    setTimeout(() => iniciarCamera(campoId, callback), 250);
+  }
 }
 
 function iniciarCamera(campoId, callback) {
-  html5QrCodeCamera = new Html5Qrcode("cameraReader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-  html5QrCodeCamera.start({ facingMode: "environment" }, config,
-    (text) => {
-      document.getElementById(campoId).value = text;
+  const formatos = [];
+  if (window.Html5QrcodeSupportedFormats) {
+    const F = window.Html5QrcodeSupportedFormats;
+    [F.QR_CODE, F.CODE_128, F.CODE_39, F.CODE_93, F.CODABAR,
+     F.EAN_13, F.EAN_8, F.ITF, F.UPC_A, F.UPC_E,
+     F.DATA_MATRIX, F.PDF_417, F.AZTEC
+    ].forEach(f => { if (f !== undefined) formatos.push(f); });
+  }
+
+  const config = {
+    fps: 20,
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const min = Math.min(viewfinderWidth, viewfinderHeight);
+      return { width: Math.floor(min * 0.9), height: Math.floor(min * 0.6) };
+    },
+    aspectRatio: 1.7,
+    disableFlip: false,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  };
+
+  try {
+    html5QrCodeCamera = new Html5Qrcode("cameraReader", {
+      formatsToSupport: formatos.length > 0 ? formatos : undefined,
+      useBarCodeDetectorIfSupported: true,
+      verbose: false
+    });
+  } catch (e) {
+    console.warn('Falha ao criar com formatos customizados, tentando padrão:', e);
+    html5QrCodeCamera = new Html5Qrcode("cameraReader");
+  }
+
+  html5QrCodeCamera.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      const campo = document.getElementById(campoId);
+      if (campo) campo.value = decodedText;
+      try { if (navigator.vibrate) navigator.vibrate(100); } catch (e) {}
       fecharCamera();
       mostrarToast('✅ Código capturado!', 'success');
       if (typeof callback === 'function') callback();
     },
     () => {}
-  ).catch(() => { fecharCamera(); mostrarToast('❌ Erro ao acessar câmera', 'error'); });
+  ).catch(err => {
+    console.error('Erro da câmera:', err);
+    fecharCamera();
+    mostrarToast('❌ Erro ao acessar câmera: ' + (err?.message || 'Verifique as permissões'), 'error');
+  });
 }
 
 function fecharCamera() {
-  document.getElementById('cameraContainer').style.display = 'none';
+  const container = document.getElementById('cameraContainer');
+  if (container) container.style.display = 'none';
   if (html5QrCodeCamera) {
-    html5QrCodeCamera.stop().then(() => { html5QrCodeCamera.clear(); html5QrCodeCamera = null; }).catch(() => { html5QrCodeCamera = null; });
+    html5QrCodeCamera.stop()
+      .then(() => html5QrCodeCamera.clear())
+      .catch(() => {})
+      .finally(() => { html5QrCodeCamera = null; });
   }
 }
 
@@ -2481,8 +2449,7 @@ function salvarModalMaquina() {
     state.injetando.push({
       id: 'maq' + Date.now(), numero: num, produtoId: pid, operador: op,
       caixasPorHora: cph, tempoPrevisto: tp, limite: lim, produzido: 0,
-      status: 'ativa', dataInicio: new Date().toLocaleString(),
-      ultimoTick: Date.now()
+      status: 'ativa', dataInicio: new Date().toLocaleString(), ultimoTick: Date.now()
     });
   }
   saveData();
@@ -2547,13 +2514,9 @@ function renderizarInjetando() {
                 <span><strong>${produzidoLive.toFixed(2)}</strong> / ${limite} cx</span>
                 <span>${pct.toFixed(1)}%</span>
               </div>
-              <div class="progress-bar">
-                <div class="progress-bar-fill" style="width:${pct}%;"></div>
-              </div>
+              <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
               <div class="progress-remaining">
-                ${m.status === 'ativa'
-                  ? `⏳ Faltam ${restante.toFixed(2)} cx · estimativa ${estimativa}`
-                  : (m.status === 'pausada' ? '⏸️ Pausada' : 'Sem produção')}
+                ${m.status === 'ativa' ? `⏳ Faltam ${restante.toFixed(2)} cx · estimativa ${estimativa}` : (m.status === 'pausada' ? '⏸️ Pausada' : 'Sem produção')}
               </div>
             </div>
           ` : '<span style="color:var(--text-muted);">Sem produção ativa</span>'}
@@ -2691,8 +2654,7 @@ function novoPedido() {
   const codigo = document.getElementById('codigoPedidoInput').value.trim();
   if (!codigo) { mostrarToast('❌ Digite um código!', 'error'); return; }
   if (state.pedidosSeparar.some(p => p.codigo === codigo)) {
-    mostrarToast('❌ Já existe um pedido com esse código!', 'error');
-    return;
+    mostrarToast('❌ Já existe um pedido com esse código!', 'error'); return;
   }
   const novo = { codigo, itens: {}, dataCriacao: new Date().toLocaleString(), status: 'separar' };
   state.pedidosSeparar.push(novo);
@@ -2917,7 +2879,6 @@ function montarPedidoCarga() {
   carregarPedidoCarga();
   const c = document.getElementById('pedidoCargaContainer');
   if (!c) return;
-
   if (!state.pedidoCargaAtual.ativo) {
     c.innerHTML = `
       <div class="pedido-carga-wrap" style="text-align:center;">
@@ -2946,7 +2907,6 @@ function renderizarCargaAtiva() {
   if (!c) return;
   const itens = state.pedidoCargaAtual.itens || {};
   const temItens = Object.keys(itens).length > 0;
-
   c.innerHTML = `
     <div class="pedido-carga-wrap">
       <div class="pedido-carga-header">
@@ -3030,23 +2990,16 @@ function adicionarProdutoPedidoCarga() {
   if (!pid || !q || q <= 0) { mostrarToast('❌ Selecione produto e quantidade!', 'error'); return; }
   const produto = state.produtos.find(p => p.id === pid);
   if (!produto) return;
-
   if (!state.pedidoCargaAtual.ativo) { mostrarToast('❌ Crie um pedido primeiro!', 'error'); return; }
-
   salvarEstadoParaUndo();
-
   if (state.pedidoCargaAtual.itens[pid]) {
     state.pedidoCargaAtual.itens[pid].quantidadePedida += q;
   } else {
     state.pedidoCargaAtual.itens[pid] = {
-      produtoId: pid,
-      nome: produto.nome,
-      codigoInterno: produto.codigoInterno || '',
-      quantidadePedida: q,
-      quantidadeProduzida: 0
+      produtoId: pid, nome: produto.nome, codigoInterno: produto.codigoInterno || '',
+      quantidadePedida: q, quantidadeProduzida: 0
     };
   }
-
   const item = state.pedidoCargaAtual.itens[pid];
   const falta = getFaltaCargaAtual(item);
   let restante = falta;
@@ -3058,23 +3011,19 @@ function adicionarProdutoPedidoCarga() {
       if (qr > 0) {
         state.carga.push({
           uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-          id: pid, quantidade: qr,
-          prateleira: l.prateleiraId, posicao: l.posicao,
+          id: pid, quantidade: qr, prateleira: l.prateleiraId, posicao: l.posicao,
           pedidoCodigo: CARGA_PEDIDO_TAG
         });
         restante -= qr;
       }
     });
   }
-
-  saveData();
-  salvarPedidoCarga();
+  saveData(); salvarPedidoCarga();
   setData(STORAGE_KEYS.carga, state.carga);
   atualizarPedidoCarga();
   carregarPrateleiras();
   carregarCarga();
   atualizarDashboard();
-
   const reservado = getReservadoCargaAtual(pid);
   const produzir = Math.max(0, item.quantidadePedida - reservado - (item.quantidadeProduzida || 0));
   if (produzir > 0) mostrarToast(`✅ Adicionado! Reservado: ${reservado} · Falta produzir: ${produzir}`, 'success');
@@ -3098,11 +3047,9 @@ function removerProdutoPedidoCarga(produtoId) {
 function registrarProducaoCarga(produtoId) {
   const item = state.pedidoCargaAtual.itens[produtoId];
   if (!item) { mostrarToast('❌ Item não está no pedido!', 'error'); return; }
-
   const reservado = getReservadoCargaAtual(produtoId);
   const falta = getFaltaCargaAtual(item);
   if (falta <= 0) { mostrarToast('✅ Este item já está completo!', 'success'); return; }
-
   const resp = prompt(
     `🏭 Registrar produção de "${item.nome}"\n\n` +
     `Pedida: ${item.quantidadePedida} cx\n` +
@@ -3116,7 +3063,6 @@ function registrarProducaoCarga(produtoId) {
   let q = parseInt(resp);
   if (isNaN(q) || q <= 0) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
   q = Math.min(q, falta);
-
   const ins = verificarInsumosSuficientes(produtoId, q);
   if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
     let m = `⚠️ INSUMOS INSUFICIENTES!\n\n`;
@@ -3125,17 +3071,12 @@ function registrarProducaoCarga(produtoId) {
     m += '\nContinuar mesmo assim?';
     if (!confirm(m)) return;
   }
-
   salvarEstadoParaUndo();
   const desc = descontarInsumos(produtoId, q);
   item.quantidadeProduzida = (item.quantidadeProduzida || 0) + q;
-
   registrarHistorico(item.nome, 'Produção para Carga', q,
     `Caixa ${desc.modeloCaixa}: -${desc.caixas} | ${desc.usa40x50 ? '40x50' : 'Emb'}: -${desc.embalagens}`);
-
-  saveData();
-  salvarPedidoCarga();
-  salvarInsumos();
+  saveData(); salvarPedidoCarga(); salvarInsumos();
   atualizarPedidoCarga();
   atualizarDashboard();
   renderizarInsumos();
@@ -3148,7 +3089,6 @@ function editarQuantidadeCarga(produtoId) {
   const reservado = getReservadoCargaAtual(produtoId);
   const produzido = item.quantidadeProduzida || 0;
   const minPedida = reservado + produzido;
-
   const resp = prompt(
     `✏️ Editar quantidade de "${item.nome}"\n\n` +
     `Pedida atual: ${item.quantidadePedida} cx\n` +
@@ -3160,8 +3100,7 @@ function editarQuantidadeCarga(produtoId) {
   if (resp === null) return;
   const q = parseInt(resp);
   if (isNaN(q) || q < minPedida) {
-    mostrarToast(`❌ Valor inválido! Mínimo: ${minPedida}`, 'error');
-    return;
+    mostrarToast(`❌ Valor inválido! Mínimo: ${minPedida}`, 'error'); return;
   }
   salvarEstadoParaUndo();
   item.quantidadePedida = q;
@@ -3174,7 +3113,6 @@ function finalizarPedidoCargaCompleto() {
   if (!state.pedidoCargaAtual.ativo) { mostrarToast('❌ Nenhum pedido de carga ativo!', 'error'); return; }
   const itens = Object.values(state.pedidoCargaAtual.itens || {});
   if (itens.length === 0) { mostrarToast('❌ Pedido vazio!', 'error'); return; }
-
   const incompletos = itens.filter(i => getFaltaCargaAtual(i) > 0);
   if (incompletos.length > 0) {
     const msg = `⚠️ Existem ${incompletos.length} item(ns) com falta:\n\n` +
@@ -3184,9 +3122,7 @@ function finalizarPedidoCargaCompleto() {
   } else {
     if (!confirm('✅ Pedido completo! Finalizar agora?\n\nAs reservas serão baixadas das prateleiras.')) return;
   }
-
   salvarEstadoParaUndo();
-
   const reservas = state.carga.filter(c => c.pedidoCodigo === CARGA_PEDIDO_TAG);
   reservas.forEach(item => {
     const s = state.prateleiras.find(x => x.id === item.prateleira);
@@ -3200,20 +3136,16 @@ function finalizarPedidoCargaCompleto() {
     const produto = state.produtos.find(p => p.id === item.id);
     if (produto) produto.quantidade = Math.max(0, (produto.quantidade || 0) - item.quantidade);
   });
-
   state.carga = state.carga.filter(c => c.pedidoCodigo !== CARGA_PEDIDO_TAG);
-
   const codigo = state.pedidoCargaAtual.codigo || 'CARGA';
   const totalPedida = itens.reduce((a, i) => a + i.quantidadePedida, 0);
   registrarHistorico(`Pedido ${codigo}`, 'Carga Finalizada', totalPedida,
     `Itens: ${itens.map(i => `${i.nome}: ${i.quantidadePedida} cx`).join(', ')}`);
-
   state.pedidoCargaAtual = { ativo: false, codigo: '', itens: {} };
   salvarPedidoCarga();
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
   setData(STORAGE_KEYS.produtos, state.produtos);
   setData(STORAGE_KEYS.carga, state.carga);
-
   atualizarPedidoCarga();
   carregarPrateleiras();
   carregarCarga();
@@ -3422,30 +3354,23 @@ function confirmarMovimentacao() {
   if (!so || !sd || !qStr) { mostrarToast('❌ Preencha tudo!', 'error'); return; }
   const q = parseInt(qStr);
   if (!q || q <= 0) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
-
   const pid = so.dataset.produto;
   const po = so.value;
   const qo = parseInt(so.dataset.quantidade);
   const pd = sd.value;
-
   if (q > qo) { mostrarToast('❌ Qtd maior que disponível!', 'error'); return; }
   const pro = movimentacaoOrigem;
   const pde = movimentacaoDestino;
   if (!pro || !pde) { mostrarToast('❌ Selecione prateleiras!', 'error'); return; }
   if (pro.id === pde.id && po === pd) { mostrarToast('❌ Origem = destino!', 'error'); return; }
-
   const itemDest = pde.produtos.find(x => x.posicao === pd);
   if (itemDest && itemDest.id !== pid) { mostrarToast('❌ Destino ocupado por outro produto!', 'error'); return; }
-
   salvarEstadoParaUndo();
   const itemOrig = pro.produtos.find(x => x.id === pid && x.posicao === po);
   itemOrig.quantidade -= q;
-  if (itemOrig.quantidade <= 0) {
-    pro.produtos = pro.produtos.filter(x => !(x.id === pid && x.posicao === po));
-  }
+  if (itemOrig.quantidade <= 0) pro.produtos = pro.produtos.filter(x => !(x.id === pid && x.posicao === po));
   if (itemDest) itemDest.quantidade += q;
   else pde.produtos.push({ id: pid, posicao: pd, quantidade: q, cor: '#FFFFFF', modeloCaixa: itemOrig.modeloCaixa || 'A' });
-
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
   registrarHistorico(state.produtos.find(x => x.id === pid)?.nome || 'Produto', 'Movimentação', q, `De ${pro.nome}-${po} para ${pde.nome}-${pd}`);
   closeModalMovimentacao();
@@ -3457,18 +3382,12 @@ function confirmarMovimentacao() {
 // EXPORTAÇÃO PDF (jsPDF + autoTable)
 // ============================================================
 
-function getJSDateStr() {
-  return new Date().toLocaleString('pt-BR');
-}
-function getJSDateSlug() {
-  return new Date().toISOString().split('T')[0];
-}
+function getJSDateStr() { return new Date().toLocaleString('pt-BR'); }
+function getJSDateSlug() { return new Date().toISOString().split('T')[0]; }
 
-// ===== Sanitização de texto pra PDF =====
 function sanitizarParaPDF(texto) {
   if (texto === null || texto === undefined) return '';
   let s = String(texto);
-
   s = s.replace(/♻️?/g, '(REC)');
   s = s.replace(/⚠️?/g, '!');
   s = s.replace(/✅ ?/g, '');
@@ -3491,16 +3410,13 @@ function sanitizarParaPDF(texto) {
   s = s.replace(/🔍/g, '');
   s = s.replace(/👑/g, '');
   s = s.replace(/👤/g, '');
-
   s = s.replace(/[^\x00-\xFF]/g, '');
   s = s.replace(/&/g, '&amp;');
   s = s.replace(/</g, '&lt;');
   s = s.replace(/>/g, '&gt;');
-
   return s.trim();
 }
 
-// Wrapper do autoTable que sanitiza automaticamente
 function autoTableSeguro(doc, options) {
   const opts = Object.assign({}, options);
   if (opts.head) opts.head = opts.head.map(row => row.map(cell => sanitizarParaPDF(cell)));
@@ -3509,7 +3425,6 @@ function autoTableSeguro(doc, options) {
   return doc.autoTable(opts);
 }
 
-// ===== PDF: ESTOQUE =====
 function exportarEstoquePDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3518,23 +3433,17 @@ function exportarEstoquePDF() {
   doc.setFillColor(26, 43, 76);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Relatorio de Estoque', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
   const totalProdutos = state.produtos.length;
   const totalUnidades = state.produtos.reduce((a, p) => a + (p.quantidade || 0), 0);
   const comEstoque = state.produtos.filter(p => (p.quantidade || 0) > 0).length;
-
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
   doc.text(`Total de produtos cadastrados: ${totalProdutos}`, 14, 40);
   doc.text(`Produtos com estoque: ${comEstoque}`, 14, 46);
   doc.text(`Total de unidades no estoque: ${totalUnidades}`, 14, 52);
@@ -3543,39 +3452,27 @@ function exportarEstoquePDF() {
   state.prateleiras.forEach(shelf => {
     const produtosShelf = shelf.produtos || [];
     if (produtosShelf.length === 0) return;
-
     doc.setFillColor(240, 242, 245);
     doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.setTextColor(26, 43, 76);
     doc.text(sanitizarParaPDF(`Prateleira ${shelf.nome}`), 16, yOffset);
     yOffset += 2;
-
     const linhas = produtosShelf
       .sort((a, b) => parseInt(a.posicao) - parseInt(b.posicao))
       .map(p => {
         const prod = state.produtos.find(x => x.id === p.id);
-        return [
-          `Posicao ${p.posicao}`,
-          prod ? prod.nome : '(removido)',
-          prod ? (prod.codigoInterno || '-') : '-',
-          String(p.quantidade),
-          p.modeloCaixa ? `Caixa ${p.modeloCaixa}` : '-'
-        ];
+        return [`Posicao ${p.posicao}`, prod ? prod.nome : '(removido)', prod ? (prod.codigoInterno || '-') : '-', String(p.quantidade), p.modeloCaixa ? `Caixa ${p.modeloCaixa}` : '-'];
       });
-
     autoTableSeguro(doc, {
       startY: yOffset + 3,
       head: [['Posicao', 'Produto', 'Codigo', 'Qtd (cx)', 'Caixa']],
-      body: linhas,
-      theme: 'grid',
+      body: linhas, theme: 'grid',
       headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
       bodyStyles: { fontSize: 9, textColor: 30 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
     });
-
     yOffset = doc.lastAutoTable.finalY + 10;
     if (yOffset > 250) { doc.addPage(); yOffset = 20; }
   });
@@ -3583,18 +3480,14 @@ function exportarEstoquePDF() {
   const semEstoque = state.produtos.filter(p => !getProductLocations(p.id).length);
   if (semEstoque.length > 0) {
     if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.setTextColor(220, 38, 38);
     doc.text(sanitizarParaPDF('Produtos sem localizacao definida'), 14, yOffset);
     yOffset += 3;
-
-    const linhas = semEstoque.map(p => [p.nome, p.codigoInterno || '-', String(p.quantidade || 0)]);
-
     autoTableSeguro(doc, {
       startY: yOffset + 3,
       head: [['Produto', 'Codigo', 'Disponivel']],
-      body: linhas,
+      body: semEstoque.map(p => [p.nome, p.codigoInterno || '-', String(p.quantidade || 0)]),
       theme: 'grid',
       headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
       bodyStyles: { fontSize: 9, textColor: 30 },
@@ -3605,17 +3498,14 @@ function exportarEstoquePDF() {
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Estoque', 14, 290);
   }
-
   doc.save(`estoque_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF do estoque gerado!', 'success');
 }
 
-// ===== PDF: INSUMOS =====
 function exportarInsumosPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3624,19 +3514,14 @@ function exportarInsumosPDF() {
   doc.setFillColor(26, 43, 76);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Relatorio de Insumos', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('Estoque Consolidado', 14, 42);
 
@@ -3644,12 +3529,9 @@ function exportarInsumosPDF() {
     startY: 45,
     head: [['Insumo', 'Estoque', 'Alerta Minimo', 'Situacao']],
     body: [
-      ['Caixa Modelo A', String(state.insumos.caixaModeloA), String(state.configInsumos.alertaCaixaModeloA),
-        state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA ? 'BAIXO' : 'OK'],
-      ['Caixa Modelo B', String(state.insumos.caixaModeloB), String(state.configInsumos.alertaCaixaModeloB),
-        state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB ? 'BAIXO' : 'OK'],
-      ['Embalagem 40x50', String(state.insumos.embalagem40x50 || 0), String(state.configInsumos.alertaEmbalagem40x50),
-        (state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50 ? 'BAIXO' : 'OK'],
+      ['Caixa Modelo A', String(state.insumos.caixaModeloA), String(state.configInsumos.alertaCaixaModeloA), state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA ? 'BAIXO' : 'OK'],
+      ['Caixa Modelo B', String(state.insumos.caixaModeloB), String(state.configInsumos.alertaCaixaModeloB), state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB ? 'BAIXO' : 'OK'],
+      ['Embalagem 40x50', String(state.insumos.embalagem40x50 || 0), String(state.configInsumos.alertaEmbalagem40x50), (state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50 ? 'BAIXO' : 'OK'],
     ],
     theme: 'grid',
     headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 10 },
@@ -3660,9 +3542,7 @@ function exportarInsumosPDF() {
   });
 
   let yOffset = doc.lastAutoTable.finalY + 12;
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('Configuracao por Produto', 14, yOffset);
   yOffset += 3;
@@ -3671,69 +3551,48 @@ function exportarInsumosPDF() {
     const config = state.produtoInsumoMap[p.id] || { modeloCaixa: 'A', embalagemPorCaixa: 25, tipoEmbalagem: 'individual' };
     const usa40 = usaEmbalagem40x50(p);
     const estoque = usa40 ? (state.insumos.embalagem40x50 || 0) : (state.insumos.embalagens[p.id] || 0);
-    const alerta = usa40
-      ? state.configInsumos.alertaEmbalagem40x50
+    const alerta = usa40 ? state.configInsumos.alertaEmbalagem40x50
       : (state.configInsumos.alertaEmbalagemPorProduto?.[p.id] !== undefined ? state.configInsumos.alertaEmbalagemPorProduto[p.id] : state.configInsumos.alertaEmbalagemPadrao);
     const baixo = estoque <= alerta;
-    return [
-      p.nome,
-      `Caixa ${config.modeloCaixa}`,
-      usa40 ? '40x50' : 'Individual',
-      String(config.embalagemPorCaixa),
-      String(estoque),
-      String(alerta),
-      baixo ? 'BAIXO' : 'OK'
-    ];
+    return [p.nome, `Caixa ${config.modeloCaixa}`, usa40 ? '40x50' : 'Individual', String(config.embalagemPorCaixa), String(estoque), String(alerta), baixo ? 'BAIXO' : 'OK'];
   });
 
   autoTableSeguro(doc, {
     startY: yOffset + 3,
     head: [['Produto', 'Caixa', 'Embalagem', 'Emb/cx', 'Estoque', 'Alerta', 'Status']],
-    body: linhasProdutos,
-    theme: 'grid',
+    body: linhasProdutos, theme: 'grid',
     headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
     bodyStyles: { fontSize: 8, textColor: 30 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: 14, right: 14 },
-    columnStyles: {
-      1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' },
-      4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' }
-    },
+    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' } },
   });
 
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Insumos', 14, 290);
   }
-
   doc.save(`insumos_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF dos insumos gerado!', 'success');
 }
 
-// ===== PDF: GRÁFICO =====
 function exportarGraficoPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   if (!state.chart) { mostrarToast('❌ Nenhum gráfico gerado ainda!', 'error'); return; }
-
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
   doc.setFillColor(26, 43, 76);
   doc.rect(0, 0, 297, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Relatorio Grafico de Estoque', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
   try {
@@ -3748,22 +3607,17 @@ function exportarGraficoPDF() {
   const totalUnid = com.reduce((a, p) => a + p.quantidade, 0);
   const totalReservado = state.carga.reduce((a, c) => a + c.quantidade, 0);
   const media = com.length > 0 ? Math.round(totalUnid / com.length) : 0;
-
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 43, 76);
   doc.text('Estatisticas', 222, 45);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.setTextColor(0, 0, 0);
   doc.text(`Produtos com estoque: ${com.length}`, 222, 55);
   doc.text(`Total de unidades: ${totalUnid}`, 222, 62);
   doc.text(`Reservado para carga: ${totalReservado}`, 222, 69);
   doc.text(`Media por produto: ${media}`, 222, 76);
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 43, 76);
   doc.text('Detalhamento por Produto', 14, 180);
 
@@ -3779,8 +3633,7 @@ function exportarGraficoPDF() {
   autoTableSeguro(doc, {
     startY: 183,
     head: [['Produto', 'Codigo', 'Qtd', 'Localizacao']],
-    body: linhas,
-    theme: 'grid',
+    body: linhas, theme: 'grid',
     headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
     bodyStyles: { fontSize: 8.5, textColor: 30 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -3791,17 +3644,14 @@ function exportarGraficoPDF() {
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 290, 200, { align: 'right' });
     doc.text('D.Sync - Sistema de Estoque', 14, 200);
   }
-
   doc.save(`grafico_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF do gráfico gerado!', 'success');
 }
 
-// ===== PDF: CARGA (completo) =====
 function exportarCargaPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -3810,27 +3660,20 @@ function exportarCargaPDF() {
   doc.setFillColor(26, 43, 76);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Relatorio de Carga', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
   const reservasCarga = state.carga.filter(c => c.pedidoCodigo === CARGA_PEDIDO_TAG);
   const reservasPedido = state.carga.filter(c => c.pedidoCodigo && c.pedidoCodigo !== CARGA_PEDIDO_TAG);
   const reservasAvulsas = state.carga.filter(c => !c.pedidoCodigo);
-
   const totalReservas = state.carga.length;
   const totalCx = state.carga.reduce((a, c) => a + c.quantidade, 0);
 
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
   doc.text('Resumo Geral', 14, 40);
   doc.setFont('helvetica', 'normal');
   doc.text(`Total de reservas: ${totalReservas}`, 14, 46);
@@ -3843,62 +3686,38 @@ function exportarCargaPDF() {
 
   if (state.pedidoCargaAtual.ativo && Object.keys(state.pedidoCargaAtual.itens || {}).length > 0) {
     if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-
     doc.setFillColor(26, 43, 76);
     doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
     doc.text(sanitizarParaPDF(`Pedido de Carga: ${state.pedidoCargaAtual.codigo}`), 16, yOffset);
     yOffset += 3;
-
     const itens = Object.values(state.pedidoCargaAtual.itens);
     let totalPedida = 0, totalReservado = 0, totalProduzido = 0, totalFalta = 0;
-
     const linhas = itens.map(item => {
       const reservado = getReservadoCargaAtual(item.produtoId);
       const produzido = item.quantidadeProduzida || 0;
       const falta = getFaltaCargaAtual(item);
-      totalPedida += item.quantidadePedida;
-      totalReservado += reservado;
-      totalProduzido += produzido;
-      totalFalta += falta;
-      return [
-        item.nome,
-        item.codigoInterno || '-',
-        String(item.quantidadePedida),
-        String(reservado),
-        String(produzido),
-        String(falta),
-        falta === 0 ? 'OK' : 'PENDENTE'
-      ];
+      totalPedida += item.quantidadePedida; totalReservado += reservado;
+      totalProduzido += produzido; totalFalta += falta;
+      return [item.nome, item.codigoInterno || '-', String(item.quantidadePedida), String(reservado), String(produzido), String(falta), falta === 0 ? 'OK' : 'PENDENTE'];
     });
-
     linhas.push(['TOTAL', '', String(totalPedida), String(totalReservado), String(totalProduzido), String(totalFalta), totalFalta === 0 ? 'OK' : '']);
-
     autoTableSeguro(doc, {
       startY: yOffset + 3,
       head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Produz.', 'Falta', 'Status']],
-      body: linhas,
-      theme: 'grid',
+      body: linhas, theme: 'grid',
       headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
       bodyStyles: { fontSize: 8.5, textColor: 30 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
-      columnStyles: {
-        2: { halign: 'center' }, 3: { halign: 'center' },
-        4: { halign: 'center' }, 5: { halign: 'center' },
-        6: { halign: 'center', fontStyle: 'bold' }
-      },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' } },
       didParseCell: function(data) {
-        if (data.row.index === linhas.length - 1) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [240, 242, 245];
-        }
+        if (data.row.index === linhas.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 242, 245]; }
         if (data.column.index === 5 && data.row.index !== linhas.length - 1) {
-          const valor = parseInt(data.cell.raw);
-          if (!isNaN(valor) && valor > 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
-          else if (valor === 0) { data.cell.styles.textColor = [16, 185, 129]; }
+          const v = parseInt(data.cell.raw);
+          if (!isNaN(v) && v > 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
+          else if (v === 0) { data.cell.styles.textColor = [16, 185, 129]; }
         }
         if (data.column.index === 6 && data.row.index !== linhas.length - 1) {
           const txt = String(data.cell.raw);
@@ -3907,7 +3726,6 @@ function exportarCargaPDF() {
         }
       }
     });
-
     yOffset = doc.lastAutoTable.finalY + 12;
   }
 
@@ -3919,129 +3737,92 @@ function exportarCargaPDF() {
 
   Object.entries(pedidosComReserva).forEach(([codigoPedido, reservas]) => {
     if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-
     doc.setFillColor(5, 150, 105);
     doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
     doc.text(sanitizarParaPDF(`Pedido de Separacao: ${codigoPedido}`), 16, yOffset);
     yOffset += 3;
-
     const porProduto = {};
     reservas.forEach(r => {
       if (!porProduto[r.id]) {
         const prod = state.produtos.find(p => p.id === r.id);
-        porProduto[r.id] = {
-          nome: prod ? prod.nome : '(removido)',
-          codigo: prod ? (prod.codigoInterno || '-') : '-',
-          reservada: 0,
-          locais: []
-        };
+        porProduto[r.id] = { nome: prod ? prod.nome : '(removido)', codigo: prod ? (prod.codigoInterno || '-') : '-', reservada: 0, locais: [] };
       }
       porProduto[r.id].reservada += r.quantidade;
       const nomePrat = state.prateleiras.find(s => s.id === r.prateleira)?.nome || '?';
       porProduto[r.id].locais.push(`${nomePrat}${r.posicao}(${r.quantidade})`);
     });
-
     const pedidoSalvo = state.pedidosSeparar.find(p => p.codigo === codigoPedido);
-
     const linhas = Object.entries(porProduto).map(([pid, dados]) => {
       const itemPedido = pedidoSalvo?.itens?.[pid];
       const pedida = itemPedido ? itemPedido.pacotes : dados.reservada;
       const falta = Math.max(0, pedida - dados.reservada);
-      return [
-        dados.nome,
-        dados.codigo,
-        String(pedida),
-        String(dados.reservada),
-        String(falta),
-        dados.locais.join(', ')
-      ];
+      return [dados.nome, dados.codigo, String(pedida), String(dados.reservada), String(falta), dados.locais.join(', ')];
     });
-
     autoTableSeguro(doc, {
       startY: yOffset + 3,
       head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Falta', 'Local']],
-      body: linhas,
-      theme: 'grid',
+      body: linhas, theme: 'grid',
       headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
       bodyStyles: { fontSize: 8, textColor: 30 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
-      columnStyles: {
-        2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center', fontStyle: 'bold' }
-      },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center', fontStyle: 'bold' } },
       didParseCell: function(data) {
         if (data.column.index === 4) {
-          const valor = parseInt(data.cell.raw);
-          if (!isNaN(valor) && valor > 0) { data.cell.styles.textColor = [220, 38, 38]; }
-          else if (valor === 0) { data.cell.styles.textColor = [16, 185, 129]; }
+          const v = parseInt(data.cell.raw);
+          if (!isNaN(v) && v > 0) data.cell.styles.textColor = [220, 38, 38];
+          else if (v === 0) data.cell.styles.textColor = [16, 185, 129];
         }
       }
     });
-
     yOffset = doc.lastAutoTable.finalY + 12;
   });
 
   if (reservasAvulsas.length > 0) {
     if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-
     doc.setFillColor(245, 158, 11);
     doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
     doc.text('Reservas Avulsas (sem pedido)', 16, yOffset);
     yOffset += 3;
-
     const linhas = reservasAvulsas.map(item => {
       const produto = state.produtos.find(p => p.id === item.id);
       const nomePrat = state.prateleiras.find(s => s.id === item.prateleira)?.nome || '?';
       const local = item.prateleira && item.posicao ? `${nomePrat}${item.posicao}` : '-';
-      return [
-        produto ? produto.nome : '(removido)',
-        produto ? (produto.codigoInterno || '-') : '-',
-        String(item.quantidade),
-        local
-      ];
+      return [produto ? produto.nome : '(removido)', produto ? (produto.codigoInterno || '-') : '-', String(item.quantidade), local];
     });
-
     autoTableSeguro(doc, {
       startY: yOffset + 3,
       head: [['Produto', 'Codigo', 'Qtd (cx)', 'Local']],
-      body: linhas,
-      theme: 'grid',
+      body: linhas, theme: 'grid',
       headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
       bodyStyles: { fontSize: 8.5, textColor: 30 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
       columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' } }
     });
-
     yOffset = doc.lastAutoTable.finalY + 12;
   }
 
   if (totalReservas === 0) {
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(11);
+    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
     doc.text('Nenhuma reserva de carga no momento.', 14, yOffset);
   }
 
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Sistema de Carga', 14, 290);
   }
-
   doc.save(`carga_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF da carga gerado!', 'success');
 }
 
-// ===== PDF: PEDIDOS PARA SEPARAR =====
 function exportarPedidosSepararPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -4050,83 +3831,57 @@ function exportarPedidosSepararPDF() {
   doc.setFillColor(5, 150, 105);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Pedidos para Separar', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
   const total = state.pedidosSeparar.length;
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
   doc.text(`Total de pedidos pendentes: ${total}`, 14, 40);
 
   if (total === 0) {
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(11);
+    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
     doc.text('Nenhum pedido pendente no momento.', 14, 52);
   } else {
     let yOffset = 48;
     state.pedidosSeparar.forEach((pedido) => {
       if (yOffset > 240) { doc.addPage(); yOffset = 20; }
-
       doc.setFillColor(240, 253, 244);
       doc.rect(14, yOffset - 5, 182, 8, 'F');
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
       doc.setTextColor(5, 150, 105);
       doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
       yOffset += 2;
-
       const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
       doc.text(`Criado em: ${pedido.dataCriacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
       yOffset += 5;
-
       const linhas = Object.values(pedido.itens).map(item => {
-        const res = state.carga
-          .filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo)
-          .reduce((a, c) => a + c.quantidade, 0);
+        const res = state.carga.filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo).reduce((a, c) => a + c.quantidade, 0);
         const falta = Math.max(0, item.pacotes - res);
-        return [
-          item.nome,
-          item.codigoInterno || '-',
-          String(item.pacotes),
-          String(res),
-          String(falta),
-          falta === 0 ? 'OK' : 'FALTANDO'
-        ];
+        return [item.nome, item.codigoInterno || '-', String(item.pacotes), String(res), String(falta), falta === 0 ? 'OK' : 'FALTANDO'];
       });
-
       autoTableSeguro(doc, {
         startY: yOffset + 3,
         head: [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']],
-        body: linhas,
-        theme: 'grid',
+        body: linhas, theme: 'grid',
         headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
         bodyStyles: { fontSize: 8.5, textColor: 30 },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 14, right: 14 },
-        columnStyles: {
-          2: { halign: 'center' }, 3: { halign: 'center' },
-          4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' }
-        },
+        columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
         didParseCell: function(data) {
           if (data.column.index === 5 && data.row.index >= 0) {
             const txt = String(data.cell.raw);
-            if (txt === 'FALTANDO') { data.cell.styles.textColor = [220, 38, 38]; }
-            else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; }
+            if (txt === 'FALTANDO') data.cell.styles.textColor = [220, 38, 38];
+            else if (txt === 'OK') data.cell.styles.textColor = [16, 185, 129];
           }
         }
       });
-
       yOffset = doc.lastAutoTable.finalY + 12;
     });
   }
@@ -4134,17 +3889,14 @@ function exportarPedidosSepararPDF() {
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Pedidos para Separar', 14, 290);
   }
-
   doc.save(`pedidos_separar_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF dos pedidos gerado!', 'success');
 }
 
-// ===== PDF: PEDIDOS FINALIZADOS =====
 function exportarPedidosFinalizadosPDF() {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -4153,65 +3905,47 @@ function exportarPedidosFinalizadosPDF() {
   doc.setFillColor(71, 85, 105);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text('Pedidos Finalizados', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
 
   const total = state.pedidosFinalizados.length;
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
   doc.text(`Total de pedidos finalizados: ${total}`, 14, 40);
 
   if (total === 0) {
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(11);
+    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
     doc.text('Nenhum pedido finalizado ainda.', 14, 52);
   } else {
     let yOffset = 48;
     const ordenados = [...state.pedidosFinalizados].reverse();
     ordenados.forEach(pedido => {
       if (yOffset > 240) { doc.addPage(); yOffset = 20; }
-
       doc.setFillColor(241, 245, 249);
       doc.rect(14, yOffset - 5, 182, 8, 'F');
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
       doc.setTextColor(71, 85, 105);
       doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
       yOffset += 2;
-
       const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
       doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
       yOffset += 5;
-
-      const linhas = Object.values(pedido.itens).map(item => [
-        item.nome,
-        item.codigoInterno || '-',
-        String(item.pacotes)
-      ]);
-
+      const linhas = Object.values(pedido.itens).map(item => [item.nome, item.codigoInterno || '-', String(item.pacotes)]);
       autoTableSeguro(doc, {
         startY: yOffset + 3,
         head: [['Produto', 'Codigo', 'Qtd (cx)']],
-        body: linhas,
-        theme: 'grid',
+        body: linhas, theme: 'grid',
         headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
         bodyStyles: { fontSize: 8.5, textColor: 30 },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 14, right: 14 },
         columnStyles: { 2: { halign: 'center' } },
       });
-
       yOffset = doc.lastAutoTable.finalY + 12;
     });
   }
@@ -4219,23 +3953,19 @@ function exportarPedidosFinalizadosPDF() {
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync - Pedidos Finalizados', 14, 290);
   }
-
   doc.save(`pedidos_finalizados_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF dos finalizados gerado!', 'success');
 }
 
-// ===== PDF: PEDIDO INDIVIDUAL =====
 function exportarPedidoIndividualPDF(codigo, tipo) {
   if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
   const lista = tipo === 'finalizado' ? state.pedidosFinalizados : state.pedidosSeparar;
   const pedido = lista.find(p => p.codigo === codigo);
   if (!pedido) { mostrarToast('❌ Pedido não encontrado!', 'error'); return; }
-
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
@@ -4243,19 +3973,13 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   doc.setFillColor(...corFundo);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
   doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.text(tipo === 'finalizado' ? 'Pedido Finalizado' : 'Pedido de Separacao', 14, 19);
-
-  doc.setTextColor(80, 80, 80);
-  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
   doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
   doc.setTextColor(...corFundo);
   doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 14, 44);
 
@@ -4263,61 +3987,41 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   const totalVol = Object.values(pedido.itens).reduce((a, i) => a + i.caixas, 0);
   const totalItens = Object.values(pedido.itens).length;
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
   doc.setTextColor(0, 0, 0);
   doc.text(`Criado em: ${pedido.dataCriacao || '-'}`, 14, 52);
-  if (tipo === 'finalizado') {
-    doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'}`, 14, 58);
-  }
+  if (tipo === 'finalizado') doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'}`, 14, 58);
   doc.text(`Itens diferentes: ${totalItens}`, 14, tipo === 'finalizado' ? 64 : 58);
   doc.text(`Total de volumes (caixas): ${totalVol}`, 14, tipo === 'finalizado' ? 70 : 64);
   doc.text(`Total de caixas pedidas: ${totalCx}`, 14, tipo === 'finalizado' ? 76 : 70);
 
   const linhas = Object.values(pedido.itens).map(item => {
-    if (tipo === 'finalizado') {
-      return [item.nome, item.codigoInterno || '-', String(item.pacotes)];
-    }
-    const res = state.carga
-      .filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo)
-      .reduce((a, c) => a + c.quantidade, 0);
+    if (tipo === 'finalizado') return [item.nome, item.codigoInterno || '-', String(item.pacotes)];
+    const res = state.carga.filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo).reduce((a, c) => a + c.quantidade, 0);
     const falta = Math.max(0, item.pacotes - res);
-    return [
-      item.nome,
-      item.codigoInterno || '-',
-      String(item.pacotes),
-      String(res),
-      String(falta),
-      falta === 0 ? 'OK' : 'FALTANDO'
-    ];
+    return [item.nome, item.codigoInterno || '-', String(item.pacotes), String(res), String(falta), falta === 0 ? 'OK' : 'FALTANDO'];
   });
 
-  const headers = tipo === 'finalizado'
-    ? [['Produto', 'Codigo', 'Qtd (cx)']]
-    : [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']];
+  const headers = tipo === 'finalizado' ? [['Produto', 'Codigo', 'Qtd (cx)']] : [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']];
 
   autoTableSeguro(doc, {
     startY: tipo === 'finalizado' ? 84 : 78,
-    head: headers,
-    body: linhas,
-    theme: 'grid',
+    head: headers, body: linhas, theme: 'grid',
     headStyles: { fillColor: corFundo, textColor: 255, fontStyle: 'bold', fontSize: 9 },
     bodyStyles: { fontSize: 9, textColor: 30 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: 14, right: 14 },
-    columnStyles: tipo === 'finalizado'
-      ? { 2: { halign: 'center' } }
-      : { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
+    columnStyles: tipo === 'finalizado' ? { 2: { halign: 'center' } } : { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
     didParseCell: function(data) {
       if (tipo !== 'finalizado' && data.column.index === 5) {
         const txt = String(data.cell.raw);
-        if (txt === 'FALTANDO') { data.cell.styles.textColor = [220, 38, 38]; }
-        else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; }
+        if (txt === 'FALTANDO') data.cell.styles.textColor = [220, 38, 38];
+        else if (txt === 'OK') data.cell.styles.textColor = [16, 185, 129];
       }
       if (tipo !== 'finalizado' && data.column.index === 4) {
-        const valor = parseInt(data.cell.raw);
-        if (!isNaN(valor) && valor > 0) data.cell.styles.textColor = [220, 38, 38];
-        else if (valor === 0) data.cell.styles.textColor = [16, 185, 129];
+        const v = parseInt(data.cell.raw);
+        if (!isNaN(v) && v > 0) data.cell.styles.textColor = [220, 38, 38];
+        else if (v === 0) data.cell.styles.textColor = [16, 185, 129];
       }
     }
   });
@@ -4327,8 +4031,7 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
     doc.setDrawColor(150, 150, 150);
     doc.line(14, finalY, 90, finalY);
     doc.line(120, finalY, 196, finalY);
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100);
     doc.text('Responsavel pela separacao', 14, finalY + 4);
     doc.text('Conferente', 120, finalY + 4);
   }
@@ -4336,30 +4039,25 @@ function exportarPedidoIndividualPDF(codigo, tipo) {
   const totalPag = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPag; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
     doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
     doc.text('D.Sync', 14, 290);
   }
-
   doc.save(`pedido_${pedido.codigo}_${getJSDateSlug()}.pdf`);
   mostrarToast('📄 PDF do pedido gerado!', 'success');
 }
 
-// ===== Injeção de botões PDF nas telas =====
+// ===== Injeção de botões PDF =====
 function injetarBotoesPDF() {
-  // Estoque → Prateleiras
   const shelfControls = document.querySelector('#sub-tab-prateleiras .controls');
   if (shelfControls && !document.getElementById('btnPDFEstoque')) {
     const btn = document.createElement('button');
-    btn.id = 'btnPDFEstoque';
-    btn.className = 'info';
+    btn.id = 'btnPDFEstoque'; btn.className = 'info';
     btn.textContent = '📄 Exportar PDF';
     btn.onclick = exportarEstoquePDF;
     shelfControls.appendChild(btn);
   }
 
-  // Estoque → Gráfico
   const graficoControls = document.querySelector('.grafico-controls');
   if (graficoControls && !document.getElementById('btnPDFGrafico')) {
     const btn = document.createElement('button');
@@ -4369,31 +4067,26 @@ function injetarBotoesPDF() {
     graficoControls.appendChild(btn);
   }
 
-  // Pedidos → Separar
   const separarContainer = document.querySelector('#sub-tab-separar .pedido-lista-container');
   if (separarContainer && !document.getElementById('btnPDFSeparar')) {
     const btn = document.createElement('button');
-    btn.id = 'btnPDFSeparar';
-    btn.className = 'btn btn-info btn-md';
+    btn.id = 'btnPDFSeparar'; btn.className = 'btn btn-info btn-md';
     btn.style.marginBottom = '15px';
     btn.textContent = '📄 Exportar Lista em PDF';
     btn.onclick = exportarPedidosSepararPDF;
     separarContainer.insertBefore(btn, separarContainer.querySelector('#listaPedidosSeparar'));
   }
 
-  // Pedidos → Finalizado
   const finalContainer = document.querySelector('#sub-tab-finalizado .pedido-lista-container');
   if (finalContainer && !document.getElementById('btnPDFFinal')) {
     const btn = document.createElement('button');
-    btn.id = 'btnPDFFinal';
-    btn.className = 'btn btn-info btn-md';
+    btn.id = 'btnPDFFinal'; btn.className = 'btn btn-info btn-md';
     btn.style.marginBottom = '15px';
     btn.textContent = '📄 Exportar Lista em PDF';
     btn.onclick = exportarPedidosFinalizadosPDF;
     finalContainer.insertBefore(btn, finalContainer.querySelector('#listaPedidosFinalizados'));
   }
 
-  // Botões individuais em cada pedido (separar)
   document.querySelectorAll('#listaPedidosSeparar .pedido-card').forEach(card => {
     if (card.querySelector('.btn-pdf-pedido')) return;
     const codigo = card.querySelector('.pedido-codigo')?.textContent.replace('📋', '').trim();
@@ -4402,14 +4095,12 @@ function injetarBotoesPDF() {
     if (!acoes) return;
     const btn = document.createElement('button');
     btn.className = 'btn btn-sm btn-pdf-pedido';
-    btn.style.background = '#7c3aed';
-    btn.style.color = 'white';
+    btn.style.background = '#7c3aed'; btn.style.color = 'white';
     btn.textContent = '📄 PDF';
     btn.onclick = () => exportarPedidoIndividualPDF(codigo, 'separar');
     acoes.appendChild(btn);
   });
 
-  // Botões individuais em cada pedido (finalizado)
   document.querySelectorAll('#listaPedidosFinalizados .pedido-card').forEach(card => {
     if (card.querySelector('.btn-pdf-pedido')) return;
     const codigo = card.querySelector('.pedido-codigo')?.textContent.replace('✅', '').trim();
@@ -4418,8 +4109,7 @@ function injetarBotoesPDF() {
     if (!acoes) return;
     const btn = document.createElement('button');
     btn.className = 'btn btn-sm btn-pdf-pedido';
-    btn.style.background = '#7c3aed';
-    btn.style.color = 'white';
+    btn.style.background = '#7c3aed'; btn.style.color = 'white';
     btn.textContent = '📄 PDF';
     btn.onclick = () => exportarPedidoIndividualPDF(codigo, 'finalizado');
     acoes.appendChild(btn);
@@ -4428,9 +4118,19 @@ function injetarBotoesPDF() {
 
 document.addEventListener('DOMContentLoaded', function () {
   setTimeout(injetarBotoesPDF, 500);
+
+  // Enter no leitor (scanner com \n automático)
+  const input = document.getElementById('codigoLido');
+  if (input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        adicionarCodigoLido();
+      }
+    });
+  }
 });
 
-// Envolve as funções que atualizam listas para reinjetar botões
 const _atualizarListasPedidosOriginal = typeof atualizarListasPedidos === 'function' ? atualizarListasPedidos : null;
 if (_atualizarListasPedidosOriginal) {
   window.atualizarListasPedidos = function() {
@@ -4456,4 +4156,4 @@ if (_mostrarSubAbaOriginal) {
 }
 
 // ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo + PDFs!');
+console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + Leitor externo!');
