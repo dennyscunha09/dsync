@@ -1,5 +1,5 @@
 /* ============================================================
-   D.Sync - ESTILOS COMPLETOS (Refatorado)
+   D.Sync - ESTILOS COMPLETOS + QR CODE + SCANNER FLUTUANTE
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -327,7 +327,7 @@ body.dark-mode .dash-card .dash-number { color: #f1f5f9; }
 .dash-btn { display: block; width: 100%; padding: 12px 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text); font-weight: 600; cursor: pointer; transition: var(--transition); text-align: left; font-size: 13px; }
 .dash-btn:hover { background: var(--primary); color: white; transform: translateX(6px); box-shadow: var(--shadow-md); border-color: transparent; }
 
-/* ===== PRATELEIRAS (refatorado) ===== */
+/* ===== PRATELEIRAS ===== */
 .shelf {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -375,7 +375,7 @@ body.dark-mode .dash-card .dash-number { color: #f1f5f9; }
     width: 100% !important;
 }
 
-/* ===== POSITION CARDS (refatorado) ===== */
+/* ===== POSITION CARDS ===== */
 .position-card {
     background: var(--bg-subtle);
     border-radius: 8px;
@@ -533,12 +533,7 @@ body.dark-mode .dash-card .dash-number { color: #f1f5f9; }
 .btn-save { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; }
 .btn-cancel { background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border) !important; }
 
-/* Sub-blocos dentro de modais */
-.modal-block {
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 12px;
-}
+.modal-block { padding: 12px; border-radius: 8px; margin-top: 12px; }
 .modal-block-info { background: var(--bg-subtle); border-left: 4px solid var(--info); }
 .modal-block-primary { background: var(--bg-subtle); border-left: 4px solid var(--primary); }
 .modal-block-purple { background: var(--bg-subtle); border-left: 4px solid var(--purple); }
@@ -593,14 +588,12 @@ body.dark-mode .dash-card .dash-number { color: #f1f5f9; }
 .badge-warning { background: rgba(245, 158, 11, 0.15); color: #b45309; }
 .badge-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger-hover); }
 
-/* Tabelas de Injeção */
 .tabela-injecao { width: 100%; border-collapse: collapse; }
 .tabela-injecao thead tr { background: var(--primary); color: white; }
 .tabela-injecao th { padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 .tabela-injecao td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-size: 13.5px; }
 .tabela-injecao tr:hover { background: var(--bg-subtle); }
 
-/* Materia Prima cards */
 .mp-card {
     background: var(--bg-subtle);
     padding: 15px;
@@ -708,7 +701,6 @@ body.dark-mode .insumo-card.baixo { background: rgba(239, 68, 68, 0.12); }
     margin-top: 6px;
 }
 
-/* Tabela de insumos */
 .insumos-tabela-wrap {
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -774,7 +766,6 @@ body.dark-mode .insumos-tabela tr.baixo { background: rgba(239, 68, 68, 0.12); }
 .valor-baixo { color: var(--danger); font-weight: 700; }
 .valor-ok { color: var(--success); font-weight: 700; }
 
-/* Modal de Insumos */
 .input-insumo {
     width: 70px;
     padding: 5px;
@@ -935,3 +926,141 @@ body.dark-mode .tabela-carga tr.pendente { background: rgba(245, 158, 11, 0.12);
 .dash-card:nth-child(7) { animation-delay: 0.14s; }
 .dash-card:nth-child(8) { animation-delay: 0.16s; }
 .dash-card:nth-child(9) { animation-delay: 0.18s; }
+
+/* ============================================================
+   QR CODE + SCANNER FLUTUANTE (D.Sync) - NOVO
+   ============================================================ */
+
+/* --- QR Code dentro do cabeçalho da prateleira --- */
+.shelf-header-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.shelf-qr-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #ffffff;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
+}
+
+body.dark-mode .shelf-qr-wrapper {
+    background: #f8fafc;
+}
+
+.shelf-qr {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shelf-qr img,
+.shelf-qr canvas {
+    width: 80px !important;
+    height: 80px !important;
+    display: block;
+}
+
+.shelf-qr-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #1A2B4C;
+    letter-spacing: 1px;
+    margin-top: 4px;
+    text-align: center;
+}
+
+/* --- Botão flutuante (FAB) de scanner --- */
+#fabScanner {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #F59E0B 0%, #d97706 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(245, 158, 11, 0.45), 0 4px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fabPulse 2.5s ease-in-out infinite;
+}
+
+#fabScanner:hover {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 16px 36px rgba(245, 158, 11, 0.55), 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+#fabScanner:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+#fabScanner .fab-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+#fabScanner .fab-label {
+    letter-spacing: 0.3px;
+}
+
+@keyframes fabPulse {
+    0%, 100% { box-shadow: 0 12px 28px rgba(245, 158, 11, 0.45), 0 4px 8px rgba(0, 0, 0, 0.15); }
+    50%      { box-shadow: 0 12px 28px rgba(245, 158, 11, 0.75), 0 4px 8px rgba(0, 0, 0, 0.2); }
+}
+
+/* --- Modal do scanner --- */
+#scannerPrateleiraReader video {
+    width: 100% !important;
+    border-radius: 12px;
+}
+
+#scannerPrateleiraReader canvas {
+    display: none !important;
+}
+
+/* --- Responsivo: em telas pequenas o FAB fica só com ícone --- */
+@media (max-width: 600px) {
+    #fabScanner {
+        bottom: 16px;
+        right: 16px;
+        padding: 14px;
+        border-radius: 50%;
+    }
+    #fabScanner .fab-label {
+        display: none;
+    }
+    #fabScanner .fab-icon {
+        font-size: 24px;
+    }
+    .shelf-qr,
+    .shelf-qr img,
+    .shelf-qr canvas {
+        width: 64px !important;
+        height: 64px !important;
+    }
+}
+
+/* --- Destaque quando um item de movimentação é clicado --- */
+.mov-posicao-item {
+    transition: all 0.15s ease;
+}
+.mov-posicao-item:hover {
+    border-color: var(--primary) !important;
+    background: var(--bg-card) !important;
+    transform: translateX(3px);
+}abbr
