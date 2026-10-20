@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + LEITOR MELHORADO
+// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + QR CODE
 // ============================================================
 
 const state = {
@@ -678,7 +678,6 @@ function verificarAlertasInsumos() {
   }
   return alertas;
 }
-
 function abrirModalInsumos() {
   let linhas = '';
   state.produtos.forEach(p => {
@@ -876,7 +875,7 @@ function renderPosicaoOcupada(shelf, posNum, pos) {
       <div class="position-actions">
         <button class="btn btn-xs btn-orange" onclick="abrirSeparacao('${shelf.id}','${pos.id}','${pos.posicao}')" title="Reservar">📦</button>
         ${disponivel > 0 ? `<button class="btn btn-xs btn-success" onclick="adicionarCarga('${shelf.id}','${pos.id}','${pos.posicao}')" title="Enviar p/ carga">🚛</button>` : ''}
-        <button class="btn btn-xs btn-yellow" onclick="editarCorPosicao('${shelf.id}','${pos.id}')">🎨</button>
+        <button class="btn btn-xs btn-yellow" onclick="editarCorPosicao('${shelf.id}','${pos.id}','${pos.posicao}')">🎨</button>
         <button class="btn btn-xs btn-info" onclick="abrirEditarPosicao('${shelf.id}','${pos.id}','${pos.posicao}')">✏️</button>
         <button class="btn btn-xs btn-danger" onclick="removerDaPrateleira('${shelf.id}','${pos.id}','${pos.posicao}')">🗑️</button>
       </div>
@@ -897,6 +896,7 @@ function renderPosicao(shelf, posNum) {
   return p ? renderPosicaoOcupada(shelf, posNum, p) : renderPosicaoVazia(shelf, posNum);
 }
 
+// ===== RENDER PRATELEIRA COM QR CODE (NOVO) =====
 function renderPrateleira(shelf) {
   const div = document.createElement('div');
   div.className = 'shelf';
@@ -904,19 +904,47 @@ function renderPrateleira(shelf) {
   const n = shelf.numPosicoes || 12;
   let posHtml = '';
   for (let i = 1; i <= n; i++) posHtml += renderPosicao(shelf, i);
-  const codigoHtml = shelf.codigoBarras ? `<span class="shelf-title-code">(${shelf.codigoBarras})</span>` : '';
+
+  const qrId = `qr-${shelf.id}-${Date.now()}`;
+  const codigoPrateleira = shelf.codigoBarras || gerarCodigoPrateleira(shelf.id);
+
   div.innerHTML = `
     <div class="shelf-header">
-      <h2 class="shelf-title">📦 ${shelf.nome} ${codigoHtml}</h2>
+      <div class="shelf-header-info">
+        <div>
+          <h2 class="shelf-title">📦 ${shelf.nome} <span class="shelf-title-code">(${codigoPrateleira})</span></h2>
+        </div>
+        <div class="shelf-qr-wrapper">
+          <div id="${qrId}" class="shelf-qr"></div>
+          <div class="shelf-qr-label">${codigoPrateleira}</div>
+        </div>
+      </div>
       <div class="shelf-actions">
         <button class="btn btn-sm btn-green" onclick="adicionarPosicaoPrateleira('${shelf.id}')">➕ Posição</button>
         <button class="btn btn-sm btn-orange" onclick="removerPosicaoPrateleira('${shelf.id}')">➖ Posição</button>
         <button class="btn btn-sm btn-yellow" onclick="editarCorPrateleira('${shelf.id}')">🎨</button>
         <button class="btn btn-sm btn-info" onclick="editarNomePrateleira('${shelf.id}')">✏️</button>
+        <button class="btn btn-sm btn-info" onclick="imprimirQRCodePrateleira('${shelf.id}')">🖨️ QR</button>
         <button class="btn btn-sm btn-danger" onclick="removerPrateleira('${shelf.id}')">🗑️</button>
       </div>
     </div>
     <div class="shelf-positions-grid">${posHtml}</div>`;
+
+  setTimeout(() => {
+    const qrEl = document.getElementById(qrId);
+    if (qrEl && typeof QRCode !== 'undefined') {
+      qrEl.innerHTML = '';
+      new QRCode(qrEl, {
+        text: codigoPrateleira,
+        width: 80,
+        height: 80,
+        colorDark: '#1A2B4C',
+        colorLight: '#FFFFFF',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  }, 30);
+
   return div;
 }
 
@@ -1033,12 +1061,21 @@ function editarCorPrateleira(id) {
   abrirModalCor({ tipo: 'shelfColor', titulo: '🎨 Cor', valorAtual: s.cor || '#1A2B4C', currentEditData: { shelfId: id } });
 }
 
-function editarCorPosicao(shelfId, produtoId) {
+// ===== CORREÇÃO: COR POR POSIÇÃO ESPECÍFICA =====
+function editarCorPosicao(shelfId, produtoId, posicao) {
   const s = state.prateleiras.find(x => x.id === shelfId);
   if (!s) return;
-  const p = s.produtos.find(x => x.id === produtoId);
-  if (!p) return;
-  abrirModalCor({ tipo: 'positionColor', titulo: '🎨 Cor Posição', valorAtual: p.cor || '#FFFFFF', currentEditData: { shelfId, produtoId } });
+  const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
+  if (!p) {
+    mostrarToast('❌ Posição não encontrada!', 'error');
+    return;
+  }
+  abrirModalCor({
+    tipo: 'positionColor',
+    titulo: `🎨 Cor da Posição ${posicao}`,
+    valorAtual: p.cor || '#FFFFFF',
+    currentEditData: { shelfId, produtoId, posicao }
+  });
 }
 
 function salvarCorPrateleira() {
@@ -1051,15 +1088,23 @@ function salvarCorPrateleira() {
 }
 
 function salvarCorPosicao() {
-  const s = state.prateleiras.find(x => x.id === state.currentEdit.shelfId);
+  if (!state.currentEdit) return;
+  const { shelfId, produtoId, posicao } = state.currentEdit;
+  const s = state.prateleiras.find(x => x.id === shelfId);
   if (!s) return;
-  const p = s.produtos.find(x => x.id === state.currentEdit.produtoId);
-  if (!p) return;
+  const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
+  if (!p) {
+    mostrarToast('❌ Posição não encontrada!', 'error');
+    return;
+  }
   salvarEstadoParaUndo();
   p.cor = document.getElementById('colorInput').value;
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
   carregarPrateleiras();
-}// ===== POSIÇÕES =====
+  mostrarToast('✅ Cor aplicada na posição!', 'success');
+}
+
+// ===== POSIÇÕES =====
 function abrirAdicionarPosicao(shelfId, posNum) {
   state.currentPosicaoEdit = { shelfId, posicaoNum: posNum, produtoId: null };
   document.getElementById('modalPosicaoTitle').textContent = `➕ Posição ${posNum}`;
@@ -1595,17 +1640,14 @@ function carregarCarga() {
   document.getElementById('totalCargaProdutos').textContent = state.carga.length;
   document.getElementById('totalCargaItens').textContent = total;
 }
-
-// ===== LEITOR DE PEDIDOS (MELHORADO) =====
+// ===== LEITOR DE PEDIDOS =====
 function extrairCodigoEQuantidade(valorBruto) {
   let valor = String(valorBruto || '').trim();
   if (!valor) return { codigo: '', quantidade: 1, formato: '' };
 
-  // Normaliza espaços múltiplos em um só
   valor = valor.replace(/\s+/g, ' ').trim();
 
-  // ===== FORMATO EXTERNO =====
-  // "50,00 pct cepep15-500" ou "50 pct CPEP15-500" ou "50 un CPEP15-500"
+  // FORMATO EXTERNO: "50,00 pct cepep15-500" ou "50 pct CPEP15-500" ou "50 un CPEP15-500"
   const regexExterno = /^(\d+(?:[.,]\d+)?)\s*(?:pct|pcts|un|uns|cx|pc|pcs|unid|unids|unidade|unidades)\s+(.+)$/i;
   const m1 = valor.match(regexExterno);
   if (m1) {
@@ -1618,8 +1660,7 @@ function extrairCodigoEQuantidade(valorBruto) {
     };
   }
 
-  // ===== FORMATO INTERNO =====
-  // "cp1-100:50" ou "cp1-100X50" ou "cp1-100*50"
+  // FORMATO INTERNO: "cp1-100:50" ou "cp1-100X50" ou "cp1-100*50"
   const regexInterno = /^(.+?)[:\*xX](\d+)$/;
   const m2 = valor.match(regexInterno);
   if (m2) {
@@ -1631,8 +1672,7 @@ function extrairCodigoEQuantidade(valorBruto) {
     };
   }
 
-  // ===== FORMATO "numero + codigo" (sem palavra-chave) =====
-  // "50 cepep15-500"
+  // FORMATO "numero + codigo": "50 cepep15-500"
   const regexNumCod = /^(\d+(?:[.,]\d+)?)\s+([a-zA-Z][\w\-.,]*)$/;
   const m3 = valor.match(regexNumCod);
   if (m3) {
@@ -1645,7 +1685,6 @@ function extrairCodigoEQuantidade(valorBruto) {
     };
   }
 
-  // ===== FALLBACK: apenas o código, sem quantidade =====
   return {
     codigo: valor.toUpperCase(),
     quantidade: 1,
@@ -1662,13 +1701,11 @@ function adicionarCodigoLido() {
   const { codigo, quantidade, formato } = extrairCodigoEQuantidade(valorOriginal);
   if (!codigo) { mostrarToast('❌ Código inválido!', 'error'); return; }
 
-  // Busca 1: match exato (por código interno OU por barcode)
   let produto = state.produtos.find(p =>
     (p.codigoInterno && p.codigoInterno.toUpperCase() === codigo) ||
     (p.barcode && p.barcode.toUpperCase() === codigo)
   );
 
-  // Busca 2: match parcial (se não achou exato, tenta "contém")
   if (!produto) {
     produto = state.produtos.find(p => {
       const ci = (p.codigoInterno || '').toUpperCase();
@@ -1781,7 +1818,7 @@ function exportarPedido() {
 
 function escanearCodigoPedido() { abrirCameraParaCampo('codigoLido', () => adicionarCodigoLido()); }
 
-// ===== CÂMERA (lê QR + código de barras) =====
+// ===== CÂMERA =====
 let html5QrCodeCamera = null;
 
 function abrirCameraParaCampo(campoId, callback) {
@@ -2216,7 +2253,9 @@ function limparEstoqueProdutoEspecifico(id) {
   saveData();
   atualizarTudo();
   mostrarToast('✅ Zerado!', 'success');
-}// ===== NAVEGAÇÃO =====
+}
+
+// ===== NAVEGAÇÃO =====
 function switchTab(tab) {
   document.body.classList.remove('tab-dashboard', 'tab-estoque', 'tab-pedidos', 'tab-injecao', 'tab-usuarios');
   document.body.classList.add('tab-' + tab);
@@ -2873,7 +2912,6 @@ function excluirPedido(codigo, tipo) {
   carregarCarga();
   mostrarToast('🗑️ Excluído!', 'warning');
 }
-
 // ===== PEDIDO DE CARGA PERSISTENTE =====
 function montarPedidoCarga() {
   carregarPedidoCarga();
@@ -3299,6 +3337,8 @@ function abrirMovimentacao() {
   document.getElementById('movOrigemInput').value = '';
   document.getElementById('movPosicoesOrigem').innerHTML = '';
   document.getElementById('movDestinoContainer').style.display = 'none';
+  document.getElementById('movPosicoesDestino').innerHTML = '';
+  document.getElementById('movDestinoInput').value = '';
   document.getElementById('modalMovimentacao').style.display = 'flex';
 }
 
@@ -3317,7 +3357,7 @@ function buscarPosicoesOrigem() {
   c.innerHTML = '<h4 style="color:var(--text);">Selecione a origem:</h4>';
   p.produtos.forEach(pos => {
     const prod = state.produtos.find(x => x.id === pos.id);
-    c.innerHTML += `<div style="border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:6px;color:var(--text);background:var(--bg-subtle);">
+    c.innerHTML += `<div class="mov-posicao-item" style="border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:6px;color:var(--text);background:var(--bg-subtle);">
       <input type="radio" name="movPosicaoOrigem" value="${pos.posicao}" data-produto="${pos.id}" data-quantidade="${pos.quantidade}">
       <strong>Posição ${pos.posicao}</strong> - ${prod ? prod.nome : '?'} (${pos.quantidade} cx)</div>`;
   });
@@ -4116,21 +4156,296 @@ function injetarBotoesPDF() {
   });
 }
 
+// ============================================================
+// QR CODE DAS PRATELEIRAS + SCANNER FLUTUANTE (NOVO)
+// ============================================================
+
+function imprimirQRCodePrateleira(shelfId) {
+  const shelf = state.prateleiras.find(s => s.id === shelfId);
+  if (!shelf) { mostrarToast('❌ Prateleira não encontrada!', 'error'); return; }
+  const codigo = shelf.codigoBarras || gerarCodigoPrateleira(shelf.id);
+  const win = window.open('', '_blank');
+  if (!win) { mostrarToast('❌ Bloqueador de pop-up ativo!', 'error'); return; }
+  win.document.write(`
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>QR Code - Prateleira ${shelf.nome}</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f4f6fb; }
+        .qr-card {
+          display: inline-block; border: 3px solid #1A2B4C; border-radius: 20px;
+          padding: 35px 45px; margin: 20px; background: white;
+          box-shadow: 0 12px 40px rgba(26,43,76,0.15);
+        }
+        .qr-nome { font-size: 34px; font-weight: 800; color: #1A2B4C; margin-bottom: 6px; }
+        .qr-codigo { font-size: 20px; font-weight: 700; color: #F59E0B; letter-spacing: 3px; margin-bottom: 20px; }
+        .qr-img { margin: 20px 0; }
+        .qr-legenda { font-size: 13px; color: #666; margin-top: 12px; letter-spacing: 1px; }
+        @media print { .no-print { display: none !important; } body { padding: 0; background: white; } .qr-card { box-shadow: none; } }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-bottom:20px;">
+        <button onclick="window.print()" style="padding:14px 36px;background:#1A2B4C;color:white;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;">🖨️ Imprimir QR Code</button>
+      </div>
+      <div class="qr-card">
+        <div class="qr-nome">📦 Prateleira ${shelf.nome}</div>
+        <div class="qr-codigo">${codigo}</div>
+        <div id="qrcode" class="qr-img"></div>
+        <div class="qr-legenda">D.Sync · Escaneie para movimentação</div>
+      </div>
+      <script>
+        new QRCode(document.getElementById("qrcode"), {
+          text: "${codigo}", width: 320, height: 320,
+          colorDark: "#1A2B4C", colorLight: "#FFFFFF",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      <\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function imprimirTodosQRCodes() {
+  if (state.prateleiras.length === 0) {
+    mostrarToast('❌ Nenhuma prateleira cadastrada!', 'error');
+    return;
+  }
+  const win = window.open('', '_blank');
+  if (!win) { mostrarToast('❌ Bloqueador de pop-up ativo!', 'error'); return; }
+
+  let cardsHtml = '';
+  state.prateleiras.forEach(shelf => {
+    const codigo = shelf.codigoBarras || gerarCodigoPrateleira(shelf.id);
+    cardsHtml += `
+      <div class="qr-card">
+        <div class="qr-nome">📦 ${shelf.nome}</div>
+        <div class="qr-codigo">${codigo}</div>
+        <div id="qr-${shelf.id}" class="qr-img"></div>
+      </div>`;
+  });
+
+  let geradoresJs = '';
+  state.prateleiras.forEach(s => {
+    const codigo = s.codigoBarras || gerarCodigoPrateleira(s.id);
+    geradoresJs += `new QRCode(document.getElementById("qr-${s.id}"), { text: "${codigo}", width: 220, height: 220, colorDark: "#1A2B4C", colorLight: "#FFFFFF", correctLevel: QRCode.CorrectLevel.H });\n`;
+  });
+
+  win.document.write(`
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Todos os QR Codes - D.Sync</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 25px; background: #f4f6fb; }
+        .qr-card {
+          display: inline-block; border: 3px solid #1A2B4C; border-radius: 18px;
+          padding: 22px 28px; margin: 12px; background: white;
+          box-shadow: 0 8px 24px rgba(26,43,76,0.12);
+          page-break-inside: avoid; vertical-align: top;
+        }
+        .qr-nome { font-size: 26px; font-weight: 800; color: #1A2B4C; }
+        .qr-codigo { font-size: 15px; font-weight: 700; color: #F59E0B; letter-spacing: 2px; margin-bottom: 12px; }
+        @media print { .no-print { display: none !important; } body { padding: 0; background: white; } .qr-card { box-shadow: none; } }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-bottom:20px;">
+        <button onclick="window.print()" style="padding:14px 36px;background:#1A2B4C;color:white;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;">🖨️ Imprimir Todos</button>
+      </div>
+      ${cardsHtml}
+      <script>
+        ${geradoresJs}
+      <\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+// ---------- Scanner flutuante ----------
+let html5QrCodeScannerPrateleira = null;
+let scannerPrateleiraCallback = null;
+
+function abrirScannerPrateleira(callbackAcao) {
+  scannerPrateleiraCallback = callbackAcao || null;
+  const modal = document.getElementById('modalScannerPrateleira');
+  if (!modal) { mostrarToast('❌ Modal do scanner não encontrado!', 'error'); return; }
+  modal.style.display = 'flex';
+  const input = document.getElementById('scannerPrateleiraInput');
+  if (input) { input.value = ''; }
+  setTimeout(iniciarCameraScannerPrateleira, 250);
+}
+
+function iniciarCameraScannerPrateleira() {
+  const readerEl = document.getElementById('scannerPrateleiraReader');
+  if (!readerEl) return;
+  readerEl.innerHTML = '';
+
+  if (html5QrCodeScannerPrateleira) {
+    html5QrCodeScannerPrateleira.stop()
+      .then(() => html5QrCodeScannerPrateleira.clear())
+      .catch(() => {})
+      .finally(() => {
+        html5QrCodeScannerPrateleira = null;
+        criarInstanciaScannerPrateleira();
+      });
+  } else {
+    criarInstanciaScannerPrateleira();
+  }
+}
+
+function criarInstanciaScannerPrateleira() {
+  try {
+    html5QrCodeScannerPrateleira = new Html5Qrcode("scannerPrateleiraReader");
+  } catch (e) {
+    console.error(e);
+    mostrarToast('❌ Erro ao iniciar câmera!', 'error');
+    return;
+  }
+
+  const config = {
+    fps: 20,
+    qrbox: function(w, h) {
+      const min = Math.min(w, h);
+      return { width: Math.floor(min * 0.85), height: Math.floor(min * 0.85) };
+    },
+    aspectRatio: 1.0
+  };
+
+  html5QrCodeScannerPrateleira.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {}
+      processarCodigoScannerPrateleira(decodedText);
+    },
+    () => {}
+  ).catch(err => {
+    console.error('Erro câmera scanner:', err);
+    mostrarToast('❌ Erro ao acessar câmera: ' + (err?.message || 'verifique permissões'), 'error');
+  });
+}
+
+function confirmarScannerPrateleiraManual() {
+  const input = document.getElementById('scannerPrateleiraInput');
+  const cod = (input?.value || '').trim().toUpperCase();
+  if (!cod) { mostrarToast('❌ Digite um código!', 'error'); return; }
+  processarCodigoScannerPrateleira(cod);
+}
+
+function processarCodigoScannerPrateleira(codigoLido) {
+  const cod = String(codigoLido || '').trim().toUpperCase();
+  if (!cod) return;
+
+  const shelf = state.prateleiras.find(s =>
+    (s.codigoBarras && s.codigoBarras.toUpperCase() === cod) ||
+    (s.id && s.id.toUpperCase() === cod) ||
+    (s.nome && s.nome.toUpperCase() === cod)
+  );
+
+  if (!shelf) {
+    mostrarToast(`❌ Prateleira "${cod}" não encontrada!`, 'error');
+    return;
+  }
+
+  if (typeof scannerPrateleiraCallback === 'function') {
+    fecharScannerPrateleira(false);
+    try { scannerPrateleiraCallback(cod, shelf); } catch (e) { console.error(e); }
+    scannerPrateleiraCallback = null;
+    return;
+  }
+
+  fecharScannerPrateleira(false);
+  mostrarToast(`✅ Prateleira ${shelf.nome} detectada!`, 'success');
+  setTimeout(() => { abrirMovimentacaoComOrigem(shelf.id); }, 200);
+}
+
+function fecharScannerPrateleira() {
+  const modal = document.getElementById('modalScannerPrateleira');
+  if (modal) modal.style.display = 'none';
+  if (html5QrCodeScannerPrateleira) {
+    html5QrCodeScannerPrateleira.stop()
+      .then(() => html5QrCodeScannerPrateleira.clear())
+      .catch(() => {})
+      .finally(() => { html5QrCodeScannerPrateleira = null; });
+  }
+  scannerPrateleiraCallback = null;
+}
+
+function abrirMovimentacaoComOrigem(shelfId) {
+  movimentacaoOrigem = null;
+  movimentacaoDestino = null;
+
+  const elOrigem = document.getElementById('movOrigemInput');
+  if (elOrigem) elOrigem.value = '';
+  const elPosOrig = document.getElementById('movPosicoesOrigem');
+  if (elPosOrig) elPosOrig.innerHTML = '';
+  const elDest = document.getElementById('movDestinoContainer');
+  if (elDest) elDest.style.display = 'none';
+  const elPosDest = document.getElementById('movPosicoesDestino');
+  if (elPosDest) elPosDest.innerHTML = '';
+  const elDestInput = document.getElementById('movDestinoInput');
+  if (elDestInput) elDestInput.value = '';
+
+  const shelf = state.prateleiras.find(s => s.id === shelfId);
+  if (!shelf) { mostrarToast('❌ Prateleira não encontrada!', 'error'); return; }
+
+  if (elOrigem) elOrigem.value = shelf.codigoBarras || shelf.id;
+
+  if (typeof buscarPosicoesOrigem === 'function') buscarPosicoesOrigem();
+
+  document.getElementById('modalMovimentacao').style.display = 'flex';
+  mostrarToast(`📦 Prateleira ${shelf.nome} carregada. Selecione a posição de origem.`, 'info');
+}
+
+// ---------- Abrir scanner a partir de um campo (para movimentação) ----------
+function abrirScannerParaCampo(campoId) {
+  scannerPrateleiraCallback = (codigo, shelf) => {
+    const campo = document.getElementById(campoId);
+    if (campo) campo.value = codigo;
+    mostrarToast(`✅ ${codigo} capturado!`, 'success');
+  };
+  const modal = document.getElementById('modalScannerPrateleira');
+  if (!modal) { mostrarToast('❌ Modal não encontrado!', 'error'); return; }
+  modal.style.display = 'flex';
+  const input = document.getElementById('scannerPrateleiraInput');
+  if (input) input.value = '';
+  setTimeout(iniciarCameraScannerPrateleira, 250);
+}
+
+// ---------- Enter no campo manual do scanner ----------
 document.addEventListener('DOMContentLoaded', function () {
   setTimeout(injetarBotoesPDF, 500);
 
-  // Enter no leitor (scanner com \n automático)
-  const input = document.getElementById('codigoLido');
-  if (input) {
-    input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        adicionarCodigoLido();
-      }
+  const inputLeitor = document.getElementById('codigoLido');
+  if (inputLeitor) {
+    inputLeitor.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); adicionarCodigoLido(); }
     });
   }
+
+  const inputManual = document.getElementById('scannerPrateleiraInput');
+  if (inputManual) {
+    inputManual.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); confirmarScannerPrateleiraManual(); }
+    });
+  }
+
+  setInterval(() => {
+    const fab = document.getElementById('fabScanner');
+    const app = document.getElementById('appContent');
+    if (!fab || !app) return;
+    const appVisivel = app.style.display !== 'none';
+    fab.style.display = appVisivel ? 'flex' : 'none';
+  }, 500);
 });
 
+// ===== Hooks em funções originais =====
 const _atualizarListasPedidosOriginal = typeof atualizarListasPedidos === 'function' ? atualizarListasPedidos : null;
 if (_atualizarListasPedidosOriginal) {
   window.atualizarListasPedidos = function() {
@@ -4156,4 +4471,4 @@ if (_mostrarSubAbaOriginal) {
 }
 
 // ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + Leitor externo!');
+console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Flutuante!');
