@@ -9,8 +9,9 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -166,6 +167,7 @@
                             <button class="primary" onclick="addShelf()">➕ Adicionar Prateleira</button>
                             <button class="primary" onclick="abrirMovimentacao()">🔄 Movimentação</button>
                             <button class="info" onclick="imprimirEtiquetas()">🖨️ Imprimir Etiquetas</button>
+                            <button class="info" onclick="imprimirTodosQRCodes()">📱 QR Codes (Todas)</button>
                             <button onclick="resetAll()">🔄 Resetar</button>
                             <button class="info" onclick="abrirExportar()">📥 Exportar Dados</button>
                             <button class="warning" onclick="abrirImportar()">📤 Importar Dados</button>
@@ -297,7 +299,6 @@
                         <button class="sub-tab" data-subaba="carga" onclick="mostrarSubAba('carga')">🚛 Carga</button>
                     </div>
 
-                    <!-- Sub-aba Pedido Novo -->
                     <div id="sub-tab-pedidonovo" class="sub-tab-content active">
                         <div class="pedido-novo-container">
                             <h3>📋 Criação de Pedido de Separação</h3>
@@ -311,7 +312,6 @@
                         </div>
                     </div>
 
-                    <!-- Sub-aba Separar -->
                     <div id="sub-tab-separar" class="sub-tab-content">
                         <div class="pedido-lista-container">
                             <h3>📦 Pedidos para Separar</h3>
@@ -319,7 +319,6 @@
                         </div>
                     </div>
 
-                    <!-- Sub-aba Finalizado -->
                     <div id="sub-tab-finalizado" class="sub-tab-content">
                         <div class="pedido-lista-container">
                             <h3>✅ Pedidos Finalizados</h3>
@@ -327,17 +326,13 @@
                         </div>
                     </div>
 
-                    <!-- Sub-aba Leitor -->
                     <div id="sub-tab-leitor" class="sub-tab-content">
                         <div class="leitor-container">
                             <h2 style="color:#1A2B4C;margin-bottom:20px;">📷 Leitor de Pedidos</h2>
                             <div style="background:#f8f9fa;border-radius:12px;padding:20px;margin-bottom:20px;">
                                 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
                                     <input type="text" id="codigoLido" placeholder="Digite ou escaneie o código..." style="flex:1;padding:12px 15px;border:2px solid #ddd;border-radius:8px;font-size:16px;min-width:200px;">
-                                    
-                                    <!-- Botão escanear -->
                                     <button onclick="escanearCodigoPedido()" style="padding:10px 25px;background:#3498db;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">📷 Escanear</button>
-                                    
                                     <button onclick="adicionarCodigoLido()" style="padding:10px 25px;background:#2ecc71;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">➕ Adicionar</button>
                                     <button onclick="simularLeitura()" style="padding:10px 25px;background:#3498db;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">📱 Simular</button>
                                     <button onclick="limparPedido()" style="padding:10px 25px;background:#e74c3c;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">🗑️ Limpar</button>
@@ -387,7 +382,6 @@
                         </div>
                     </div>
 
-                    <!-- Sub-aba Carga -->
                     <div id="sub-tab-carga" class="sub-tab-content">
                         <div class="controls">
                             <button class="success" onclick="adicionarTodosCarga()">➕ Adicionar Todos</button>
@@ -408,14 +402,13 @@
             <div id="tab-injecao" class="tab-content">
                 <div class="injecao-container">
                     <div class="sub-tabs">
-                        <button class="sub-tab active" data-subaba="injeção" onclick="mostrarSubAba('injecao')">📦 INJEÇÃO</button>
+                        <button class="sub-tab active" data-subaba="injecao" onclick="mostrarSubAba('injecao')">📦 INJEÇÃO</button>
                         <button class="sub-tab" data-subaba="injetar" onclick="mostrarSubAba('injetar')">🔥 INJETAR</button>
                         <button class="sub-tab" data-subaba="injetando" onclick="mostrarSubAba('injetando')">⚙️ INJETANDO</button>
                         <button class="sub-tab" data-subaba="injetados" onclick="mostrarSubAba('injetados')">✅ INJETADOS</button>
                         <button class="sub-tab" data-subaba="materiaprima" onclick="mostrarSubAba('materiaprima')">🧪 MATÉRIA PRIMA</button>
                     </div>
 
-                    <!-- Sub-aba INJEÇÃO (cadastro) -->
                     <div id="sub-tab-injecao" class="sub-tab-content active">
                         <div class="controls">
                             <button class="primary" onclick="abrirModalInjecao()">➕ Novo Produto</button>
@@ -425,7 +418,6 @@
                         <div id="injecaoContainer"></div>
                     </div>
 
-                    <!-- Sub-aba INJETAR (pendentes) -->
                     <div id="sub-tab-injetar" class="sub-tab-content">
                         <div class="controls">
                             <button class="info" onclick="renderizarInjetar()">🔄 Atualizar</button>
@@ -433,7 +425,6 @@
                         <div id="injetarContainer"></div>
                     </div>
 
-                    <!-- Sub-aba INJETANDO (máquinas) -->
                     <div id="sub-tab-injetando" class="sub-tab-content">
                         <div class="controls">
                             <button class="primary" onclick="abrirModalMaquina()">➕ Nova Máquina</button>
@@ -443,7 +434,6 @@
                         <div id="injetandoContainer"></div>
                     </div>
 
-                    <!-- Sub-aba INJETADOS -->
                     <div id="sub-tab-injetados" class="sub-tab-content">
                         <div class="controls">
                             <button class="info" onclick="renderizarInjetados()">🔄 Atualizar</button>
@@ -452,7 +442,6 @@
                         <div id="injetadosContainer"></div>
                     </div>
 
-                    <!-- Sub-aba MATÉRIA PRIMA -->
                     <div id="sub-tab-materiaprima" class="sub-tab-content">
                         <div class="controls">
                             <button class="success" onclick="abrirModalEntradaMateriaPrima()">➕ Entrada</button>
@@ -574,7 +563,7 @@
                     <label>Prateleira de Origem (código)</label>
                     <div style="display:flex; gap:5px; margin-bottom:10px;">
                         <input type="text" id="movOrigemInput" placeholder="Escaneie ou digite o código da prateleira" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;">
-                        <button onclick="abrirCameraParaCampo('movOrigemInput')" style="padding:10px;background:#3498db;color:white;border:none;border-radius:6px;cursor:pointer;">📷</button>
+                        <button onclick="abrirScannerParaCampo('movOrigemInput')" style="padding:10px;background:#3498db;color:white;border:none;border-radius:6px;cursor:pointer;">📷</button>
                     </div>
                     <button onclick="buscarPosicoesOrigem()" style="width:100%;padding:10px;background:#1A2B4C;color:white;border:none;border-radius:6px;cursor:pointer;">🔍 Buscar Posições</button>
                     <div id="movPosicoesOrigem" style="margin-top:15px;"></div>
@@ -582,7 +571,7 @@
                         <label>Prateleira de Destino (código)</label>
                         <div style="display:flex; gap:5px; margin-bottom:10px;">
                             <input type="text" id="movDestinoInput" placeholder="Escaneie ou digite o código da prateleira" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;">
-                            <button onclick="abrirCameraParaCampo('movDestinoInput')" style="padding:10px;background:#3498db;color:white;border:none;border-radius:6px;cursor:pointer;">📷</button>
+                            <button onclick="abrirScannerParaCampo('movDestinoInput')" style="padding:10px;background:#3498db;color:white;border:none;border-radius:6px;cursor:pointer;">📷</button>
                         </div>
                         <button onclick="buscarPosicoesDestino()" style="width:100%;padding:10px;background:#1A2B4C;color:white;border:none;border-radius:6px;cursor:pointer;">🔍 Ver Posições de Destino</button>
                         <div id="movPosicoesDestino" style="margin-top:15px;"></div>
@@ -595,7 +584,6 @@
             </div>
         </div>
 
-        <!-- Modais da Injeção -->
         <div class="modal" id="modalInjecao">
             <div class="modal-content">
                 <h2 id="modalInjecaoTitle">➕ Cadastrar Produto</h2>
@@ -635,6 +623,29 @@
                 <h3 style="margin-bottom:10px;">📷 Escaneie o código</h3>
                 <div id="cameraReader" style="width:100%;"></div>
                 <button onclick="fecharCamera()" style="margin-top:10px;padding:10px 20px;background:#e74c3c;color:white;border:none;border-radius:6px;cursor:pointer;">❌ Fechar</button>
+            </div>
+        </div>
+
+        <!-- ===== BOTÃO FLUTUANTE: SCANNER DE PRATELEIRA ===== -->
+        <button id="fabScanner" onclick="abrirScannerPrateleira()" title="Escanear QR Code da prateleira">
+            <span class="fab-icon">📷</span>
+            <span class="fab-label">Escanear</span>
+        </button>
+
+        <!-- ===== MODAL: SCANNER DE PRATELEIRA ===== -->
+        <div class="modal" id="modalScannerPrateleira">
+            <div class="modal-content" style="max-width:520px;">
+                <h2>📷 Escanear Prateleira</h2>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:15px;">
+                    Aponte a câmera para o QR Code da prateleira.<br>
+                    O sistema abrirá a movimentação automaticamente.
+                </p>
+                <div id="scannerPrateleiraReader" style="width:100%;border-radius:12px;overflow:hidden;background:#000;min-height:280px;"></div>
+                <div style="margin-top:15px;display:flex;gap:10px;flex-wrap:wrap;">
+                    <input type="text" id="scannerPrateleiraInput" placeholder="Ou digite o código (ex: PRAT-A)" style="flex:1;min-width:180px;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);">
+                    <button class="btn btn-md btn-success" onclick="confirmarScannerPrateleiraManual()">✅ Ir</button>
+                    <button class="btn btn-md btn-danger" onclick="fecharScannerPrateleira()">❌ Fechar</button>
+                </div>
             </div>
         </div>
 
