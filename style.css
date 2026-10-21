@@ -212,8 +212,10 @@ body.dark-mode #loginScreen input:focus { box-shadow: 0 0 0 4px rgba(245, 158, 1
     pointer-events: none;
 }
 
-.header-left { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
-.header-logo { width: 64px; height: 64px; flex-shrink: 0; object-fit: cover; border-radius: 14px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.header-left { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; transition: var(--transition); }
+.header-left:hover { opacity: 0.9; }
+.header-left:hover .header-logo { transform: scale(1.05) rotate(-3deg); }
+.header-logo { width: 64px; height: 64px; flex-shrink: 0; object-fit: cover; border-radius: 14px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: var(--transition); }
 .header-title { display: flex; align-items: baseline; gap: 2px; }
 .header-title .dc { font-weight: 800; font-size: 26px; color: #ffffff; letter-spacing: -0.5px; }
 .header-title .sync { font-weight: 300; font-size: 22px; color: rgba(255, 255, 255, 0.9); letter-spacing: 0.3px; }
@@ -928,10 +930,9 @@ body.dark-mode .tabela-carga tr.pendente { background: rgba(245, 158, 11, 0.12);
 .dash-card:nth-child(9) { animation-delay: 0.18s; }
 
 /* ============================================================
-   QR CODE + SCANNER FLUTUANTE (D.Sync) - NOVO
+   QR CODE + SCANNER FLUTUANTE + SCANNER DE PRODUTO
    ============================================================ */
 
-/* --- QR Code dentro do cabeçalho da prateleira --- */
 .shelf-header-info {
     display: flex;
     align-items: center;
@@ -978,7 +979,6 @@ body.dark-mode .shelf-qr-wrapper {
     text-align: center;
 }
 
-/* --- Botão flutuante (FAB) de scanner --- */
 #fabScanner {
     position: fixed;
     bottom: 24px;
@@ -1023,17 +1023,17 @@ body.dark-mode .shelf-qr-wrapper {
     50%      { box-shadow: 0 12px 28px rgba(245, 158, 11, 0.75), 0 4px 8px rgba(0, 0, 0, 0.2); }
 }
 
-/* --- Modal do scanner --- */
-#scannerPrateleiraReader video {
+#scannerPrateleiraReader video,
+#scannerProdutoReader video {
     width: 100% !important;
     border-radius: 12px;
 }
 
-#scannerPrateleiraReader canvas {
+#scannerPrateleiraReader canvas,
+#scannerProdutoReader canvas {
     display: none !important;
 }
 
-/* --- Responsivo: em telas pequenas o FAB fica só com ícone --- */
 @media (max-width: 600px) {
     #fabScanner {
         bottom: 16px;
@@ -1041,12 +1041,8 @@ body.dark-mode .shelf-qr-wrapper {
         padding: 14px;
         border-radius: 50%;
     }
-    #fabScanner .fab-label {
-        display: none;
-    }
-    #fabScanner .fab-icon {
-        font-size: 24px;
-    }
+    #fabScanner .fab-label { display: none; }
+    #fabScanner .fab-icon { font-size: 24px; }
     .shelf-qr,
     .shelf-qr img,
     .shelf-qr canvas {
@@ -1055,7 +1051,6 @@ body.dark-mode .shelf-qr-wrapper {
     }
 }
 
-/* --- Destaque quando um item de movimentação é clicado --- */
 .mov-posicao-item {
     transition: all 0.15s ease;
 }
@@ -1063,4 +1058,36 @@ body.dark-mode .shelf-qr-wrapper {
     border-color: var(--primary) !important;
     background: var(--bg-card) !important;
     transform: translateX(3px);
+}
+
+/* ===== INFO DO PRODUTO NA MOVIMENTAÇÃO ===== */
+#movProdutoInfo strong {
+    color: var(--primary);
+}
+#movProdutoInfo .ok {
+    color: var(--success);
+    font-weight: 600;
+}
+#movProdutoInfo .erro {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* ===== INFO DO PRODUTO NA BUSCA POR CÓDIGO ===== */
+#addProdutoInfo {
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    border-left: 4px solid var(--info);
+}
+#addProdutoInfo.ok {
+    border-left-color: var(--success);
+    background: rgba(16, 185, 129, 0.08);
+}
+#addProdutoInfo.erro {
+    border-left-color: var(--danger);
+    background: rgba(239, 68, 68, 0.08);
+}
+#addProdutoInfo strong {
+    color: var(--primary);
 }abbr
