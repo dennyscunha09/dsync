@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + QR CODE + SCANNERS
+// D.Sync - SISTEMA COMPLETO CORRIGIDO + SCANNERS
 // ============================================================
 
 const state = {
@@ -1114,6 +1114,8 @@ function abrirAdicionarPosicao(shelfId, posNum) {
     produtoIdentificado: null
   };
 
+  console.log('📂 [abrirAdicionarPosicao] Abrindo:', { shelfId, posNum });
+
   document.getElementById('modalPosicaoTitle').textContent = `➕ Posição ${posNum} — ${shelf.nome}`;
   document.getElementById('modalPosicaoBody').innerHTML = `
     <div class="scanner-produto-box">
@@ -1151,13 +1153,17 @@ function abrirAdicionarPosicao(shelfId, posNum) {
   }, 300);
 }
 
-// ===== BUSCAR PRODUTO POR CÓDIGO NA POSIÇÃO =====
+// ===== BUSCAR PRODUTO POR CÓDIGO NA POSIÇÃO (CORRIGIDO) =====
 function buscarProdutoParaPosicao() {
   const input = document.getElementById('posCodigoProduto');
   const info = document.getElementById('posProdutoIdentificado');
   if (!input || !info) return;
 
-  const cod = input.value.trim().toUpperCase();
+  const codRaw = input.value.trim();
+  const cod = codRaw.toUpperCase();
+
+  console.log('🔍 [buscarProdutoParaPosicao] Código digitado:', codRaw, '-> normalizado:', cod);
+
   if (!cod) {
     info.innerHTML = '<span style="color:var(--danger);">❌ Digite ou escaneie um código!</span>';
     info.style.display = 'block';
@@ -1165,27 +1171,66 @@ function buscarProdutoParaPosicao() {
     return;
   }
 
-  let produto = state.produtos.find(p =>
-    (p.codigoInterno && p.codigoInterno.toUpperCase() === cod) ||
-    (p.barcode && p.barcode.toUpperCase() === cod)
-  );
+  console.log('📦 [buscarProdutoParaPosicao] Produtos cadastrados:');
+  state.produtos.forEach(p => {
+    console.log(`  - "${p.nome}" | interno: "${p.codigoInterno || ''}" | barcode: "${p.barcode || ''}"`);
+  });
+
+  const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, '').trim();
+  const codNorm = norm(cod);
+
+  let produto = state.produtos.find(p => {
+    const ci = norm(p.codigoInterno);
+    const bc = norm(p.barcode);
+    return (ci && ci === codNorm) || (bc && bc === codNorm);
+  });
+
+  console.log('🔍 [busca exata]:', produto ? `✅ ${produto.nome}` : '❌ não encontrado');
 
   if (!produto) {
     produto = state.produtos.find(p => {
-      const ci = (p.codigoInterno || '').toUpperCase();
-      const bc = (p.barcode || '').toUpperCase();
+      const ci = norm(p.codigoInterno);
+      const bc = norm(p.barcode);
       if (!ci && !bc) return false;
-      return (ci && ci.includes(cod)) || (bc && bc.includes(cod));
+      return (ci && ci.includes(codNorm)) || (bc && bc.includes(codNorm)) ||
+             (ci && codNorm.includes(ci)) || (bc && codNorm.includes(bc));
     });
+    console.log('🔍 [busca parcial]:', produto ? `✅ ${produto.nome}` : '❌ não encontrado');
   }
 
   if (!produto) {
-    info.innerHTML = `<span style="color:var(--danger);">❌ Produto "${cod}" não encontrado no cadastro.</span>`;
+    produto = state.produtos.find(p => norm(p.nome).includes(codNorm));
+    console.log('🔍 [busca por nome]:', produto ? `✅ ${produto.nome}` : '❌ não encontrado');
+  }
+
+  if (!produto) {
+    info.innerHTML = `
+      <div style="color:var(--danger);font-weight:700;">❌ Produto "${codRaw}" não encontrado!</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+        Verifique se o produto está cadastrado em:<br>
+        <strong>Estoque → Cadastro</strong>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+        💡 O código lido foi "<strong>${codRaw}</strong>".<br>
+        Certifique-se de que não há espaços ou caracteres extras no cadastro.
+      </div>
+    `;
     info.style.display = 'block';
     info.className = 'scanner-produto-info erro';
-    if (state.currentPosicaoEdit) state.currentPosicaoEdit.produtoIdentificado = null;
+    if (state.currentPosicaoEdit) {
+      state.currentPosicaoEdit.produtoIdentificado = null;
+      state.currentPosicaoEdit.produtoId = null;
+    }
     return;
   }
+
+  if (state.currentPosicaoEdit) {
+    state.currentPosicaoEdit.produtoIdentificado = produto.id;
+    state.currentPosicaoEdit.produtoId = produto.id;
+  }
+
+  console.log('✅ [buscarProdutoParaPosicao] Produto identificado:', produto.nome, '| ID:', produto.id);
+  console.log('✅ [buscarProdutoParaPosicao] state.currentPosicaoEdit agora:', state.currentPosicaoEdit);
 
   const locs = getProductLocations(produto.id);
   const locStr = locs.map(l => `${l.prateleira}${l.posicao}(${l.quantidade})`).join(', ') || 'sem estoque';
@@ -1205,10 +1250,6 @@ function buscarProdutoParaPosicao() {
   info.style.display = 'block';
   info.className = 'scanner-produto-info ok';
 
-  if (state.currentPosicaoEdit) {
-    state.currentPosicaoEdit.produtoIdentificado = produto.id;
-    state.currentPosicaoEdit.produtoId = produto.id;
-  }
   const sel = document.getElementById('posProdutoSelect');
   if (sel) sel.value = produto.id;
 
@@ -1273,40 +1314,82 @@ function abrirEditarPosicao(shelfId, produtoId, posicao) {
   document.getElementById('modalPosicao').style.display = 'flex';
 }
 
-// ===== SALVAR POSIÇÃO =====
+// ===== SALVAR POSIÇÃO (CORRIGIDO) =====
 function salvarPosicao() {
-  if (!state.currentPosicaoEdit) return;
+  if (!state.currentPosicaoEdit) {
+    mostrarToast('❌ Nenhuma posição em edição!', 'error');
+    return;
+  }
+
+  console.log('💾 [salvarPosicao] Iniciando...');
+  console.log('💾 [salvarPosicao] state.currentPosicaoEdit:', JSON.parse(JSON.stringify(state.currentPosicaoEdit)));
+
   const { shelfId, posicaoNum } = state.currentPosicaoEdit;
   const s = state.prateleiras.find(x => x.id === shelfId);
-  if (!s) return;
+  if (!s) {
+    mostrarToast('❌ Prateleira não encontrada!', 'error');
+    return;
+  }
 
   const nq = parseInt(document.getElementById('posQuantidade').value) || 0;
-  if (nq < 0) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
+  console.log('💾 [salvarPosicao] Quantidade:', nq);
+
+  if (nq < 0) {
+    mostrarToast('❌ Quantidade inválida!', 'error');
+    return;
+  }
 
   let pid = state.currentPosicaoEdit.produtoIdentificado
          || state.currentPosicaoEdit.produtoId
-         || (document.getElementById('posProdutoSelect')?.value)
          || null;
 
-  // ===== FLUXO: ADICIONAR (posição vazia) =====
-  if (state.currentPosicaoEdit.produtoId === null && state.currentPosicaoEdit.produtoIdentificado === null) {
+  if (!pid) {
+    const sel = document.getElementById('posProdutoSelect');
+    if (sel && sel.value) {
+      pid = sel.value;
+      console.log('💾 [salvarPosicao] Produto do select:', pid);
+    }
+  }
+
+  if (!pid) {
     const inputCod = document.getElementById('posCodigoProduto');
-    if (inputCod && inputCod.value.trim() && !pid) {
+    if (inputCod && inputCod.value.trim()) {
+      console.log('💾 [salvarPosicao] Tentando buscar pelo campo de código...');
       buscarProdutoParaPosicao();
       pid = state.currentPosicaoEdit.produtoIdentificado;
+      console.log('💾 [salvarPosicao] Após busca:', pid);
     }
+  }
 
+  console.log('💾 [salvarPosicao] PID final:', pid);
+
+  const isAdicao = state.currentPosicaoEdit.produtoId === null
+                && state.currentPosicaoEdit.produtoIdentificado === null
+                && !state.currentPosicaoEdit.quantidadeAtual;
+
+  console.log('💾 [salvarPosicao] Modo:', isAdicao ? 'ADIÇÃO' : 'EDIÇÃO');
+
+  if (isAdicao) {
     if (!pid) {
       mostrarToast('❌ Escaneie o código de barras ou selecione um produto!', 'error');
       return;
     }
-    if (nq <= 0) { mostrarToast('❌ Quantidade deve ser maior que zero!', 'error'); return; }
+    if (nq <= 0) {
+      mostrarToast('❌ Quantidade deve ser maior que zero!', 'error');
+      return;
+    }
     if (s.produtos.find(x => parseInt(x.posicao) === parseInt(posicaoNum))) {
-      mostrarToast('❌ Posição já ocupada!', 'error'); return;
+      mostrarToast('❌ Posição já ocupada!', 'error');
+      return;
     }
 
     const produto = state.produtos.find(x => x.id === pid);
-    if (!produto) { mostrarToast('❌ Produto não encontrado!', 'error'); return; }
+    if (!produto) {
+      mostrarToast('❌ Produto não encontrado!', 'error');
+      return;
+    }
+
+    console.log('✅ [salvarPosicao] Adicionando:', produto.nome, '| Qtd:', nq, '| Prateleira:', s.nome, posicaoNum);
 
     const ins = verificarInsumosSuficientes(pid, nq);
     if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
@@ -1321,6 +1404,7 @@ function salvarPosicao() {
 
     salvarEstadoParaUndo();
     const desc = descontarInsumos(pid, nq);
+
     s.produtos.push({
       id: pid,
       posicao: posicaoNum.toString(),
@@ -1328,6 +1412,7 @@ function salvarPosicao() {
       cor: '#FFFFFF',
       modeloCaixa: desc.modeloCaixa
     });
+
     produto.quantidade = (produto.quantidade || 0) + nq;
     descontarInjetadosPorFamilia(produto, nq);
 
@@ -1344,16 +1429,20 @@ function salvarPosicao() {
 
     setData(STORAGE_KEYS.prateleiras, state.prateleiras);
     setData(STORAGE_KEYS.produtos, state.produtos);
+
     closeModalPosicao();
     atualizarTudo();
     mostrarToast(`✅ ${nq} cx de ${produto.nome} → ${s.nome}${posicaoNum}`, 'success');
     return;
   }
 
-  // ===== FLUXO: EDITAR (posição ocupada) =====
+  // ===== EDIÇÃO =====
   const produtoIdEdit = state.currentPosicaoEdit.produtoId;
   const idx = s.produtos.findIndex(x => x.id === produtoIdEdit && x.posicao === posicaoNum);
-  if (idx === -1) { mostrarToast('❌ Posição não encontrada!', 'error'); return; }
+  if (idx === -1) {
+    mostrarToast('❌ Posição não encontrada!', 'error');
+    return;
+  }
   const p = s.produtos[idx];
   const diff = nq - p.quantidade;
 
@@ -1412,283 +1501,6 @@ function removerDaPrateleira(shelfId, produtoId, posicao) {
   setData(STORAGE_KEYS.produtos, state.produtos);
   atualizarTudo();
   mostrarToast('🗑️ Removido!', 'warning');
-}
-
-// ===== SEPARAÇÃO =====
-function abrirSeparacao(shelfId, produtoId, posicao) {
-  const s = state.prateleiras.find(x => x.id === shelfId);
-  if (!s) return;
-  const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
-  if (!p) return;
-  const produto = state.produtos.find(x => x.id === produtoId);
-  if (!produto) return;
-  const reservado = state.carga
-    .filter(c => c.id === produtoId && c.prateleira === shelfId && c.posicao === posicao)
-    .reduce((a, c) => a + c.quantidade, 0);
-  const disponivel = p.quantidade - reservado;
-  state.currentSeparacao = { shelfId, produtoId, posicao };
-  document.getElementById('modalSeparacaoBody').innerHTML = `
-    <h3>${produto.nome}</h3>
-    <p>Disponível na posição ${posicao}: <strong>${disponivel} cx</strong> (Total: ${p.quantidade} cx, Reservado: ${reservado} cx)</p>
-    <label>Quantidade (caixas):</label>
-    <input type="number" id="qtdSeparar" value="${disponivel}" min="1" max="${disponivel}">`;
-  document.getElementById('modalSeparacao').style.display = 'flex';
-}
-
-function confirmarSeparacao() {
-  if (!state.currentSeparacao) return;
-  const { shelfId, produtoId, posicao } = state.currentSeparacao;
-  const q = parseInt(document.getElementById('qtdSeparar').value) || 0;
-  const s = state.prateleiras.find(x => x.id === shelfId);
-  if (!s) return;
-  const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
-  if (!p) return;
-  const reservado = state.carga
-    .filter(c => c.id === produtoId && c.prateleira === shelfId && c.posicao === posicao)
-    .reduce((a, c) => a + c.quantidade, 0);
-  const disponivel = p.quantidade - reservado;
-  if (q <= 0 || q > disponivel) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
-
-  salvarEstadoParaUndo();
-  state.carga.push({
-    uid: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-    id: produtoId, quantidade: q, prateleira: shelfId, posicao: posicao,
-    pedidoCodigo: null
-  });
-  setData(STORAGE_KEYS.carga, state.carga);
-  closeModalSeparacao();
-  atualizarTudo();
-  mostrarToast('✅ Reservado!', 'success');
-}
-
-function closeModalSeparacao() { document.getElementById('modalSeparacao').style.display = 'none'; state.currentSeparacao = null; }
-
-// ===== PRODUTOS =====
-function cadastrarProdutoBanco() {
-  const nome = document.getElementById('nomeProdutoBanco').value.trim();
-  const codigo = document.getElementById('codigoInterno').value.trim().toUpperCase();
-  const pac = parseInt(document.getElementById('pacotesPorVolume').value) || 50;
-  const bar = document.getElementById('barcodeProdutoBanco').value.trim();
-  if (!nome || !codigo) { mostrarToast('❌ Preencha nome e código!', 'error'); return; }
-  if (state.produtos.some(p => p.codigoInterno === codigo)) { mostrarToast('⚠️ Código já existe!', 'warning'); return; }
-  if (isNaN(pac) || pac <= 0) { mostrarToast('⚠️ Pacotes/Volume > 0!', 'error'); return; }
-
-  salvarEstadoParaUndo();
-  const novo = {
-    id: 'p' + Date.now(),
-    nome, codigoInterno: codigo,
-    pacotesPorVolume: pac, quantidade: 0, barcode: bar,
-    injecaoVinculo: autoDetectarVinculo(nome)
-  };
-  state.produtos.push(novo);
-  setData(STORAGE_KEYS.produtos, state.produtos);
-  state.insumos.embalagens[novo.id] = 0;
-  state.produtoInsumoMap[novo.id] = {
-    modeloCaixa: 'A',
-    embalagemPorCaixa: pac,
-    tipoEmbalagem: autoDetectarEmbalagem(nome)
-  };
-  salvarInsumos();
-  carregarProdutos();
-  atualizarSelects();
-  mostrarToast('✅ Produto cadastrado!', 'success');
-}
-
-function carregarProdutos() {
-  const lista = document.getElementById('bancoProdutosLista');
-  if (!lista) return;
-  if (state.produtos.length === 0) { lista.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Nenhum produto.</div>'; return; }
-  let html = '<table><thead><tr><th>Produto</th><th>Código</th><th>Disponível</th><th>Localização</th><th>Ações</th></tr></thead><tbody>';
-  state.produtos.forEach(p => {
-    const loc = getProductLocations(p.id);
-    const locStr = loc.map(l => `${l.prateleira}${l.posicao} (${l.quantidade} cx)`).join(', ') || '-';
-    html += `<tr><td><strong>${p.nome}</strong></td><td>${p.codigoInterno || '-'}</td><td>${p.quantidade || 0}</td><td>${locStr}</td><td>
-      <button class="btn btn-xs btn-info" onclick="editarProduto('${p.id}')">✏️</button>
-      <button class="btn btn-xs btn-danger" onclick="removerProduto('${p.id}')">🗑️</button></td></tr>`;
-  });
-  html += '</tbody></table>';
-  lista.innerHTML = html;
-}
-
-function editarProduto(id) {
-  const p = state.produtos.find(x => x.id === id);
-  if (!p) return;
-  const config = state.produtoInsumoMap[id] || { modeloCaixa: 'A', embalagemPorCaixa: p.pacotesPorVolume || 25, tipoEmbalagem: autoDetectarEmbalagem(p.nome) };
-  const injecaoOptions = ['<option value="">(nenhum - não desconta)</option>']
-    .concat(state.injecao.map(i => `<option value="${i.nome}" ${p.injecaoVinculo === i.nome ? 'selected' : ''}>${i.nome} (${i.codigoExtra})</option>`))
-    .join('');
-  const isKit = (p.nome || '').toLowerCase().includes('kit');
-
-  document.getElementById('modalTitle').textContent = '✏️ Editar Produto';
-  document.getElementById('modalBody').innerHTML = `
-    <label>Nome</label><input type="text" id="editProdNome" value="${p.nome}">
-    <label>Código</label><input type="text" id="editProdCodigo" value="${p.codigoInterno || ''}">
-    <label>Pacotes/Volume (embalagens por caixa)</label><input type="number" id="editProdPacotes" value="${p.pacotesPorVolume || 50}">
-    <label>Código de Barras</label>
-    <div class="form-flex-row">
-      <input type="text" id="editProdBarcode" value="${p.barcode || ''}" style="flex:1;">
-      <button class="btn btn-info btn-md" type="button" onclick="abrirCameraParaCampo('editProdBarcode')">📷</button>
-    </div>
-    <div class="modal-block modal-block-primary">
-      <label style="font-weight:bold;">📦 Modelo da Caixa</label>
-      <select id="editProdModeloCaixa">
-        <option value="A" ${config.modeloCaixa === 'A' ? 'selected' : ''}>Caixa Modelo A</option>
-        <option value="B" ${config.modeloCaixa === 'B' ? 'selected' : ''}>Caixa Modelo B</option>
-      </select>
-      <small class="form-hint">A caixa é sempre debitada quando o produto é adicionado à prateleira.</small>
-    </div>
-    <div class="modal-block modal-block-purple">
-      <label style="font-weight:bold;">🛍️ Tipo de Embalagem Interna</label>
-      <select id="editProdTipoEmbalagem">
-        <option value="individual" ${config.tipoEmbalagem !== '40x50' ? 'selected' : ''}>Individual (contador próprio)</option>
-        <option value="40x50" ${config.tipoEmbalagem === '40x50' ? 'selected' : ''}>40x50 (compartilhada)</option>
-      </select>
-      <small class="form-hint">Padrão automático: termina em <strong>-500</strong>, <strong>-200</strong> ou é <strong>Kit</strong> → usa 40x50.</small>
-    </div>
-    <div class="modal-block modal-block-warning">
-      <label style="font-weight:bold;">💉 Injetado vinculado (para desconto automático)</label>
-      ${isKit
-        ? `<div class="info-box"><strong>Kit</strong> desconta automaticamente:<br>• 1× C2N por caixa<br>• 0.2× CUNHA(V) por caixa (5 Kit = 1 Cunha)</div>`
-        : `<select id="editProdInjecaoVinculo">${injecaoOptions}</select>`}
-    </div>`;
-
-  state.currentEdit = { produtoId: id };
-  state.modalType = 'editarProduto';
-  document.getElementById('modal').style.display = 'flex';
-}
-
-function salvarEdicaoProduto() {
-  const id = state.currentEdit.produtoId;
-  const p = state.produtos.find(x => x.id === id);
-  if (!p) return;
-  const novoCodigo = document.getElementById('editProdCodigo').value.trim().toUpperCase();
-  if (novoCodigo && novoCodigo !== p.codigoInterno && state.produtos.some(x => x.id !== id && x.codigoInterno === novoCodigo)) {
-    mostrarToast('⚠️ Já existe outro produto com esse código!', 'warning'); return;
-  }
-  salvarEstadoParaUndo();
-  const novoPac = parseInt(document.getElementById('editProdPacotes').value) || 50;
-  p.nome = document.getElementById('editProdNome').value.trim();
-  p.codigoInterno = novoCodigo;
-  p.pacotesPorVolume = novoPac;
-  p.barcode = document.getElementById('editProdBarcode').value.trim();
-
-  const isKit = (p.nome || '').toLowerCase().includes('kit');
-  if (!isKit) {
-    const sel = document.getElementById('editProdInjecaoVinculo');
-    if (sel) p.injecaoVinculo = sel.value || '';
-  }
-
-  if (!state.produtoInsumoMap[id]) {
-    state.produtoInsumoMap[id] = { modeloCaixa: 'A', embalagemPorCaixa: novoPac, tipoEmbalagem: 'individual' };
-  }
-  const config = state.produtoInsumoMap[id];
-  config.embalagemPorCaixa = novoPac;
-  const selMod = document.getElementById('editProdModeloCaixa');
-  if (selMod) config.modeloCaixa = selMod.value;
-  const selEmb = document.getElementById('editProdTipoEmbalagem');
-  if (selEmb) config.tipoEmbalagem = selEmb.value;
-  if (state.insumos.embalagens[id] === undefined) state.insumos.embalagens[id] = 0;
-
-  setData(STORAGE_KEYS.produtos, state.produtos);
-  salvarInsumos();
-  carregarProdutos();
-  renderizarInsumos();
-  mostrarToast('✅ Atualizado!', 'success');
-}
-
-function removerProduto(id) {
-  if (!confirm('Remover produto?')) return;
-  salvarEstadoParaUndo();
-  state.prateleiras.forEach(s => { s.produtos = s.produtos.filter(p => p.id !== id); });
-  state.carga = state.carga.filter(c => c.id !== id);
-  state.produtos = state.produtos.filter(p => p.id !== id);
-  delete state.insumos.embalagens[id];
-  delete state.produtoInsumoMap[id];
-  if (state.configInsumos.alertaEmbalagemPorProduto) delete state.configInsumos.alertaEmbalagemPorProduto[id];
-  if (state.pedidoCargaAtual.itens && state.pedidoCargaAtual.itens[id]) {
-    delete state.pedidoCargaAtual.itens[id];
-    salvarPedidoCarga();
-  }
-  setData(STORAGE_KEYS.produtos, state.produtos);
-  setData(STORAGE_KEYS.prateleiras, state.prateleiras);
-  setData(STORAGE_KEYS.carga, state.carga);
-  salvarInsumos();
-  carregarProdutos();
-  atualizarSelects();
-  mostrarToast('🗑️ Removido!', 'warning');
-}
-
-function saveModal() {
-  const handlers = { shelfColor: salvarCorPrateleira, positionColor: salvarCorPosicao, editarProduto: salvarEdicaoProduto };
-  if (state.modalType === 'busca') { cancelarEdicao(); return; }
-  const h = handlers[state.modalType];
-  if (h) h();
-  cancelarEdicao();
-}
-
-function cancelarEdicao() {
-  document.getElementById('modal').style.display = 'none';
-  state.currentEdit = null;
-  state.modalType = '';
-}
-
-function adicionarProdutoExistente() {
-  const pid = document.getElementById('produtoAddExistente').value;
-  const sid = document.getElementById('shelfAddExistente').value;
-  const pos = document.getElementById('posicaoAddExistente').value;
-  const q = parseInt(document.getElementById('qtdAddExistente').value);
-  if (!pid || !sid || !pos || !q || q <= 0) { mostrarToast('⚠️ Preencha todos os campos!', 'error'); return; }
-  const produto = state.produtos.find(p => p.id === pid);
-  const shelf = state.prateleiras.find(s => s.id === sid);
-  if (!produto || !shelf) return;
-  if (shelf.produtos.some(p => p.posicao === pos)) { mostrarToast('❌ Posição ocupada!', 'error'); return; }
-  const ins = verificarInsumosSuficientes(pid, q);
-  if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
-    let m = `⚠️ INSUMOS INSUFICIENTES para "${produto.nome}"!\n\n`;
-    if (!ins.caixasSuficientes) m += `📦 Faltam ${ins.necessario.caixas - ins.disponivel.caixas} caixas\n`;
-    if (!ins.embalagensSuficientes) m += `🛍️ Faltam ${ins.necessario.embalagens - ins.disponivel.embalagens} embalagens\n`;
-    if (!confirm(m + '\nContinuar?')) return;
-  }
-  salvarEstadoParaUndo();
-  const desc = descontarInsumos(pid, q);
-  shelf.produtos.push({ id: pid, posicao: pos, quantidade: q, cor: '#FFFFFF', modeloCaixa: desc.modeloCaixa });
-  produto.quantidade = (produto.quantidade || 0) + q;
-  descontarInjetadosPorFamilia(produto, q);
-  const resAuto = tentarAutoReservarCarga(pid, sid, pos, q);
-  if (resAuto > 0) {
-    setData(STORAGE_KEYS.carga, state.carga);
-    salvarPedidoCarga();
-    registrarHistorico(produto.nome, 'Auto-reserva para Carga', resAuto, `${shelf.nome}-${pos} | Pedido: ${state.pedidoCargaAtual.codigo}`);
-  }
-  setData(STORAGE_KEYS.prateleiras, state.prateleiras);
-  setData(STORAGE_KEYS.produtos, state.produtos);
-  registrarHistorico(produto.nome, 'Endereçamento', q, `${shelf.nome}-${pos} | Caixa ${desc.modeloCaixa}: -${desc.caixas} | ${desc.usa40x50 ? '40x50' : 'Emb'}: -${desc.embalagens}`);
-  atualizarTudo();
-  mostrarToast('✅ Adicionado! Insumos descontados.', 'success');
-}
-
-function atualizarSelects() {
-  const sp = document.getElementById('produtoAddExistente');
-  if (sp) { sp.innerHTML = '<option value="">Selecione...</option>'; state.produtos.forEach(p => sp.innerHTML += `<option value="${p.id}">${p.nome}</option>`); }
-  const ss = document.getElementById('shelfAddExistente');
-  if (ss) {
-    ss.innerHTML = '<option value="">Selecione...</option>';
-    state.prateleiras.forEach(s => ss.innerHTML += `<option value="${s.id}">${s.nome}</option>`);
-    atualizarPosicoesAddExistente();
-  }
-}
-
-function atualizarPosicoesAddExistente() {
-  const sid = document.getElementById('shelfAddExistente').value;
-  const sp = document.getElementById('posicaoAddExistente');
-  sp.innerHTML = '<option value="">Selecione...</option>';
-  if (!sid) return;
-  const s = state.prateleiras.find(x => x.id === sid);
-  if (!s) return;
-  const ocup = s.produtos.map(p => p.posicao);
-  for (let i = 1; i <= (s.numPosicoes || 12); i++) {
-    if (!ocup.includes(i.toString())) sp.innerHTML += `<option value="${i}">Posição ${i}</option>`;
-  }
 }
 // ===== CARGA =====
 function adicionarCarga(shelfId, produtoId, posicao) {
@@ -4983,4 +4795,4 @@ if (_mostrarSubAbaOriginal) {
 }
 
 // ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código + Scanner na Posição!');
+console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código + Scanner na Posição (corrigido)!');
