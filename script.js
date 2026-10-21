@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + QR CODE + SCANNER PRODUTO
+// D.Sync - SISTEMA COMPLETO + PDFs + CÂMERA + QR CODE + SCANNERS
 // ============================================================
 
 const state = {
@@ -1102,25 +1102,167 @@ function salvarCorPosicao() {
   mostrarToast('✅ Cor aplicada na posição!', 'success');
 }
 
-// ===== POSIÇÕES =====
+// ===== ADICIONAR POSIÇÃO VAZIA — FLUXO COM SCANNER =====
 function abrirAdicionarPosicao(shelfId, posNum) {
-  state.currentPosicaoEdit = { shelfId, posicaoNum: posNum, produtoId: null };
-  document.getElementById('modalPosicaoTitle').textContent = `➕ Posição ${posNum}`;
+  const shelf = state.prateleiras.find(x => x.id === shelfId);
+  if (!shelf) return;
+
+  state.currentPosicaoEdit = {
+    shelfId,
+    posicaoNum: posNum,
+    produtoId: null,
+    produtoIdentificado: null
+  };
+
+  document.getElementById('modalPosicaoTitle').textContent = `➕ Posição ${posNum} — ${shelf.nome}`;
   document.getElementById('modalPosicaoBody').innerHTML = `
-    <label>Produto</label>
-    <select id="posProdutoSelect"><option value="">Selecione...</option>${state.produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}</select>
-    <label>Quantidade (caixas)</label>
+    <div class="scanner-produto-box">
+      <label style="font-weight:700;color:var(--primary);margin-bottom:6px;display:block;">
+        📦 Código de Barras do Produto *
+      </label>
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <input type="text" id="posCodigoProduto" placeholder="Escaneie ou digite o código..." style="flex:1;"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProdutoParaPosicao();}">
+        <button type="button" class="btn btn-md btn-purple" onclick="abrirScannerProdutoParaCampo('posCodigoProduto', function(){ buscarProdutoParaPosicao(); })" title="Escanear código de barras">📷</button>
+      </div>
+      <div id="posProdutoIdentificado" class="scanner-produto-info" style="display:none;"></div>
+      <div style="text-align:center;margin:10px 0;color:var(--text-muted);font-size:12px;">
+        — ou selecione manualmente na lista abaixo —
+      </div>
+      <label>Produto (lista)</label>
+      <select id="posProdutoSelect" onchange="aoSelecionarProdutoLista()">
+        <option value="">Selecione...</option>
+        ${state.produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('')}
+      </select>
+    </div>
+
+    <label style="margin-top:15px;display:block;font-weight:700;color:var(--primary);">📦 Quantidade (caixas) *</label>
     <input type="number" id="posQuantidade" value="1" min="1" step="1">
-    <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">ℹ️ Insira a quantidade em caixas.</p>`;
+
+    <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">
+      ℹ️ Escaneie o código de barras do produto ou escolha na lista. Depois digite a quantidade.
+    </p>`;
+
   document.getElementById('modalPosicao').style.display = 'flex';
+
+  setTimeout(() => {
+    const input = document.getElementById('posCodigoProduto');
+    if (input) input.focus();
+  }, 300);
 }
 
+// ===== BUSCAR PRODUTO POR CÓDIGO NA POSIÇÃO =====
+function buscarProdutoParaPosicao() {
+  const input = document.getElementById('posCodigoProduto');
+  const info = document.getElementById('posProdutoIdentificado');
+  if (!input || !info) return;
+
+  const cod = input.value.trim().toUpperCase();
+  if (!cod) {
+    info.innerHTML = '<span style="color:var(--danger);">❌ Digite ou escaneie um código!</span>';
+    info.style.display = 'block';
+    info.className = 'scanner-produto-info erro';
+    return;
+  }
+
+  let produto = state.produtos.find(p =>
+    (p.codigoInterno && p.codigoInterno.toUpperCase() === cod) ||
+    (p.barcode && p.barcode.toUpperCase() === cod)
+  );
+
+  if (!produto) {
+    produto = state.produtos.find(p => {
+      const ci = (p.codigoInterno || '').toUpperCase();
+      const bc = (p.barcode || '').toUpperCase();
+      if (!ci && !bc) return false;
+      return (ci && ci.includes(cod)) || (bc && bc.includes(cod));
+    });
+  }
+
+  if (!produto) {
+    info.innerHTML = `<span style="color:var(--danger);">❌ Produto "${cod}" não encontrado no cadastro.</span>`;
+    info.style.display = 'block';
+    info.className = 'scanner-produto-info erro';
+    if (state.currentPosicaoEdit) state.currentPosicaoEdit.produtoIdentificado = null;
+    return;
+  }
+
+  const locs = getProductLocations(produto.id);
+  const locStr = locs.map(l => `${l.prateleira}${l.posicao}(${l.quantidade})`).join(', ') || 'sem estoque';
+
+  info.innerHTML = `
+    <div style="color:var(--success);font-weight:700;font-size:14px;">
+      ✅ ${produto.nome}
+    </div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+      Código: <strong>${produto.codigoInterno || '-'}</strong>
+      · Pacotes/vol: <strong>${produto.pacotesPorVolume || 50}</strong>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+      📍 Onde já está: ${locStr}
+    </div>
+  `;
+  info.style.display = 'block';
+  info.className = 'scanner-produto-info ok';
+
+  if (state.currentPosicaoEdit) {
+    state.currentPosicaoEdit.produtoIdentificado = produto.id;
+    state.currentPosicaoEdit.produtoId = produto.id;
+  }
+  const sel = document.getElementById('posProdutoSelect');
+  if (sel) sel.value = produto.id;
+
+  const qtd = document.getElementById('posQuantidade');
+  if (qtd) { qtd.focus(); qtd.select(); }
+}
+
+// ===== AO SELECIONAR NA LISTA =====
+function aoSelecionarProdutoLista() {
+  const sel = document.getElementById('posProdutoSelect');
+  const input = document.getElementById('posCodigoProduto');
+  const info = document.getElementById('posProdutoIdentificado');
+  if (!sel || !input || !info) return;
+
+  const pid = sel.value;
+  if (!pid) {
+    if (state.currentPosicaoEdit) {
+      state.currentPosicaoEdit.produtoIdentificado = null;
+      state.currentPosicaoEdit.produtoId = null;
+    }
+    info.style.display = 'none';
+    return;
+  }
+
+  const produto = state.produtos.find(p => p.id === pid);
+  if (!produto) return;
+
+  if (state.currentPosicaoEdit) {
+    state.currentPosicaoEdit.produtoIdentificado = pid;
+    state.currentPosicaoEdit.produtoId = pid;
+  }
+
+  input.value = produto.codigoInterno || produto.barcode || '';
+
+  const locs = getProductLocations(produto.id);
+  const locStr = locs.map(l => `${l.prateleira}${l.posicao}(${l.quantidade})`).join(', ') || 'sem estoque';
+  info.innerHTML = `
+    <div style="color:var(--success);font-weight:700;font-size:14px;">✅ ${produto.nome}</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+      Código: <strong>${produto.codigoInterno || '-'}</strong> · Pacotes/vol: <strong>${produto.pacotesPorVolume || 50}</strong>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📍 Onde já está: ${locStr}</div>
+  `;
+  info.style.display = 'block';
+  info.className = 'scanner-produto-info ok';
+}
+
+// ===== EDITAR POSIÇÃO OCUPADA =====
 function abrirEditarPosicao(shelfId, produtoId, posicao) {
   const s = state.prateleiras.find(x => x.id === shelfId);
   if (!s) return;
   const p = s.produtos.find(x => x.id === produtoId && x.posicao === posicao);
   if (!p) return;
-  state.currentPosicaoEdit = { shelfId, posicaoNum: posicao, produtoId, quantidadeAtual: p.quantidade };
+  state.currentPosicaoEdit = { shelfId, posicaoNum: posicao, produtoId, quantidadeAtual: p.quantidade, produtoIdentificado: null };
   document.getElementById('modalPosicaoTitle').textContent = `✏️ Posição ${posicao}`;
   document.getElementById('modalPosicaoBody').innerHTML = `
     <label>Produto</label>
@@ -1131,22 +1273,40 @@ function abrirEditarPosicao(shelfId, produtoId, posicao) {
   document.getElementById('modalPosicao').style.display = 'flex';
 }
 
+// ===== SALVAR POSIÇÃO =====
 function salvarPosicao() {
   if (!state.currentPosicaoEdit) return;
-  const { shelfId, posicaoNum, produtoId } = state.currentPosicaoEdit;
+  const { shelfId, posicaoNum } = state.currentPosicaoEdit;
   const s = state.prateleiras.find(x => x.id === shelfId);
   if (!s) return;
+
   const nq = parseInt(document.getElementById('posQuantidade').value) || 0;
   if (nq < 0) { mostrarToast('❌ Quantidade inválida!', 'error'); return; }
 
-  if (produtoId === null) {
-    const sel = document.getElementById('posProdutoSelect');
-    const pid = sel.value;
-    if (!pid) { mostrarToast('❌ Selecione um produto!', 'error'); return; }
+  let pid = state.currentPosicaoEdit.produtoIdentificado
+         || state.currentPosicaoEdit.produtoId
+         || (document.getElementById('posProdutoSelect')?.value)
+         || null;
+
+  // ===== FLUXO: ADICIONAR (posição vazia) =====
+  if (state.currentPosicaoEdit.produtoId === null && state.currentPosicaoEdit.produtoIdentificado === null) {
+    const inputCod = document.getElementById('posCodigoProduto');
+    if (inputCod && inputCod.value.trim() && !pid) {
+      buscarProdutoParaPosicao();
+      pid = state.currentPosicaoEdit.produtoIdentificado;
+    }
+
+    if (!pid) {
+      mostrarToast('❌ Escaneie o código de barras ou selecione um produto!', 'error');
+      return;
+    }
     if (nq <= 0) { mostrarToast('❌ Quantidade deve ser maior que zero!', 'error'); return; }
-    if (s.produtos.find(x => parseInt(x.posicao) === parseInt(posicaoNum))) { mostrarToast('❌ Posição já ocupada!', 'error'); return; }
+    if (s.produtos.find(x => parseInt(x.posicao) === parseInt(posicaoNum))) {
+      mostrarToast('❌ Posição já ocupada!', 'error'); return;
+    }
+
     const produto = state.produtos.find(x => x.id === pid);
-    if (!produto) return;
+    if (!produto) { mostrarToast('❌ Produto não encontrado!', 'error'); return; }
 
     const ins = verificarInsumosSuficientes(pid, nq);
     if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
@@ -1158,9 +1318,16 @@ function salvarPosicao() {
       }
       if (!confirm(m + '\nContinuar?')) return;
     }
+
     salvarEstadoParaUndo();
     const desc = descontarInsumos(pid, nq);
-    s.produtos.push({ id: pid, posicao: posicaoNum.toString(), quantidade: nq, cor: '#FFFFFF', modeloCaixa: desc.modeloCaixa });
+    s.produtos.push({
+      id: pid,
+      posicao: posicaoNum.toString(),
+      quantidade: nq,
+      cor: '#FFFFFF',
+      modeloCaixa: desc.modeloCaixa
+    });
     produto.quantidade = (produto.quantidade || 0) + nq;
     descontarInjetadosPorFamilia(produto, nq);
 
@@ -1168,49 +1335,59 @@ function salvarPosicao() {
     if (resAuto > 0) {
       setData(STORAGE_KEYS.carga, state.carga);
       salvarPedidoCarga();
-      registrarHistorico(produto.nome, 'Auto-reserva para Carga', resAuto, `${s.nome}-${posicaoNum} | Pedido: ${state.pedidoCargaAtual.codigo}`);
+      registrarHistorico(produto.nome, 'Auto-reserva para Carga', resAuto,
+        `${s.nome}-${posicaoNum} | Pedido: ${state.pedidoCargaAtual.codigo}`);
     }
 
-    registrarHistorico(produto.nome, 'Adicionado à prateleira', nq,
+    registrarHistorico(produto.nome, 'Adicionado à prateleira (scanner)', nq,
       `${s.nome}-${posicaoNum} | Caixa ${desc.modeloCaixa}: -${desc.caixas} | ${desc.usa40x50 ? '40x50' : 'Emb'}: -${desc.embalagens}`);
-  } else {
-    const idx = s.produtos.findIndex(x => x.id === produtoId && x.posicao === posicaoNum);
-    if (idx === -1) { mostrarToast('❌ Posição não encontrada!', 'error'); return; }
-    const p = s.produtos[idx];
-    const diff = nq - p.quantidade;
 
-    if (nq === 0) s.produtos.splice(idx, 1);
-    else p.quantidade = nq;
+    setData(STORAGE_KEYS.prateleiras, state.prateleiras);
+    setData(STORAGE_KEYS.produtos, state.produtos);
+    closeModalPosicao();
+    atualizarTudo();
+    mostrarToast(`✅ ${nq} cx de ${produto.nome} → ${s.nome}${posicaoNum}`, 'success');
+    return;
+  }
 
-    const produto = state.produtos.find(x => x.id === produtoId);
-    if (produto) {
-      produto.quantidade = Math.max(0, (produto.quantidade || 0) + diff);
-      if (diff > 0) {
-        const ins = verificarInsumosSuficientes(produtoId, diff);
-        if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
-          let m = `⚠️ INSUMOS INSUFICIENTES para o aumento!\n\n`;
-          if (!ins.caixasSuficientes) m += `📦 Faltam ${ins.necessario.caixas - ins.disponivel.caixas} caixas\n`;
-          if (!ins.embalagensSuficientes) m += `🛍️ Faltam ${ins.necessario.embalagens - ins.disponivel.embalagens} embalagens\n`;
-          if (!confirm(m + '\nContinuar?')) return;
-        }
-        salvarEstadoParaUndo();
-        descontarInsumos(produtoId, diff);
-        descontarInjetadosPorFamilia(produto, diff);
-        const resAuto = tentarAutoReservarCarga(produtoId, shelfId, posicaoNum, diff);
-        if (resAuto > 0) setData(STORAGE_KEYS.carga, state.carga);
-        registrarHistorico(produto.nome, 'Ajuste de quantidade', diff, `${s.nome}-${posicaoNum} | Insumos descontados`);
-      } else if (diff < 0) {
-        salvarEstadoParaUndo();
-        devolverInsumos(produtoId, -diff);
-        registrarHistorico(produto.nome, 'Redução de quantidade', -diff, `${s.nome}-${posicaoNum} | Insumos devolvidos`);
+  // ===== FLUXO: EDITAR (posição ocupada) =====
+  const produtoIdEdit = state.currentPosicaoEdit.produtoId;
+  const idx = s.produtos.findIndex(x => x.id === produtoIdEdit && x.posicao === posicaoNum);
+  if (idx === -1) { mostrarToast('❌ Posição não encontrada!', 'error'); return; }
+  const p = s.produtos[idx];
+  const diff = nq - p.quantidade;
+
+  if (nq === 0) s.produtos.splice(idx, 1);
+  else p.quantidade = nq;
+
+  const produto = state.produtos.find(x => x.id === produtoIdEdit);
+  if (produto) {
+    produto.quantidade = Math.max(0, (produto.quantidade || 0) + diff);
+    if (diff > 0) {
+      const ins = verificarInsumosSuficientes(produtoIdEdit, diff);
+      if (!ins.caixasSuficientes || !ins.embalagensSuficientes) {
+        let m = `⚠️ INSUMOS INSUFICIENTES para o aumento!\n\n`;
+        if (!ins.caixasSuficientes) m += `📦 Faltam ${ins.necessario.caixas - ins.disponivel.caixas} caixas\n`;
+        if (!ins.embalagensSuficientes) m += `🛍️ Faltam ${ins.necessario.embalagens - ins.disponivel.embalagens} embalagens\n`;
+        if (!confirm(m + '\nContinuar?')) return;
       }
+      salvarEstadoParaUndo();
+      descontarInsumos(produtoIdEdit, diff);
+      descontarInjetadosPorFamilia(produto, diff);
+      const resAuto = tentarAutoReservarCarga(produtoIdEdit, shelfId, posicaoNum, diff);
+      if (resAuto > 0) setData(STORAGE_KEYS.carga, state.carga);
+      registrarHistorico(produto.nome, 'Ajuste de quantidade', diff, `${s.nome}-${posicaoNum} | Insumos descontados`);
+    } else if (diff < 0) {
+      salvarEstadoParaUndo();
+      devolverInsumos(produtoIdEdit, -diff);
+      registrarHistorico(produto.nome, 'Redução de quantidade', -diff, `${s.nome}-${posicaoNum} | Insumos devolvidos`);
     }
   }
   setData(STORAGE_KEYS.prateleiras, state.prateleiras);
   setData(STORAGE_KEYS.produtos, state.produtos);
   closeModalPosicao();
   atualizarTudo();
-  mostrarToast('✅ Posição salva!', 'success');
+  mostrarToast('✅ Posição atualizada!', 'success');
 }
 
 function closeModalPosicao() { document.getElementById('modalPosicao').style.display = 'none'; state.currentPosicaoEdit = null; }
@@ -4737,7 +4914,6 @@ function fecharScannerProduto() {
 document.addEventListener('DOMContentLoaded', function () {
   setTimeout(injetarBotoesPDF, 500);
 
-  // Enter no leitor de pedidos
   const inputLeitor = document.getElementById('codigoLido');
   if (inputLeitor) {
     inputLeitor.addEventListener('keydown', function(e) {
@@ -4745,7 +4921,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Enter no campo manual do scanner de prateleira
   const inputManualPrat = document.getElementById('scannerPrateleiraInput');
   if (inputManualPrat) {
     inputManualPrat.addEventListener('keydown', function(e) {
@@ -4753,7 +4928,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Enter no campo manual do scanner de produto
   const inputManualProd = document.getElementById('scannerProdutoInput');
   if (inputManualProd) {
     inputManualProd.addEventListener('keydown', function(e) {
@@ -4761,7 +4935,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Enter no campo de produto da movimentação
   const inputMovProd = document.getElementById('movProdutoInput');
   if (inputMovProd) {
     inputMovProd.addEventListener('keydown', function(e) {
@@ -4769,7 +4942,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Enter no campo de código do modal adicionar por código
   const inputAddProd = document.getElementById('addCodigoProdutoInput');
   if (inputAddProd) {
     inputAddProd.addEventListener('keydown', function(e) {
@@ -4777,7 +4949,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Mostrar/esconder FAB conforme login
   setInterval(() => {
     const fab = document.getElementById('fabScanner');
     const app = document.getElementById('appContent');
@@ -4787,7 +4958,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }, 500);
 });
 
-// Hook para atualizar PDFs ao renderizar listas
 const _atualizarListasPedidosOriginal = typeof atualizarListasPedidos === 'function' ? atualizarListasPedidos : null;
 if (_atualizarListasPedidosOriginal) {
   window.atualizarListasPedidos = function() {
@@ -4813,4 +4983,4 @@ if (_mostrarSubAbaOriginal) {
 }
 
 // ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código!');
+console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código + Scanner na Posição!');
