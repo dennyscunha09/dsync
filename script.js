@@ -499,6 +499,16 @@ function fazerLogout() {
   state.usuarioAtual = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appContent').style.display = 'none';
+
+  if (intervalBackupNuvem) {
+    clearInterval(intervalBackupNuvem);
+    intervalBackupNuvem = null;
+  }
+  
+  localStorage.removeItem(STORAGE_KEYS.sessao);
+  state.usuarioAtual = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'none';
 }
 
 function mostrarCriarConta() { document.getElementById('loginForm').style.display = 'none'; document.getElementById('criarContaForm').style.display = 'block'; document.getElementById('mensagemLogin').style.display = 'none'; }
