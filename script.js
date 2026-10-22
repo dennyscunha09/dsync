@@ -2551,7 +2551,7 @@ function exportarExcel() {
   mostrarToast('📥 Exportado!', 'success');
 }
 
-function fazerBackup() { abrirExportar(); }
+function fazerBackup() { fazerBackupSupabase(); }
 
 function searchProducts() {
   const input = document.getElementById('searchInput');
