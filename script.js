@@ -5031,6 +5031,12 @@ document.addEventListener('DOMContentLoaded', function () {
     inputLeitor.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); adicionarCodigoLido(); }
     });
+
+   if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+    .then(() => console.log('Service Worker registrado (PWA ativo)'))
+    .catch(err => console.error('Erro no SW:', err));
+    } 
   }
 
   const inputManualPrat = document.getElementById('scannerPrateleiraInput');
