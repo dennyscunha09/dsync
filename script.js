@@ -485,6 +485,8 @@ function entrarApp() {
   inicializarApp();
   iniciarBackupAutomatico();
   iniciarTimerProducao();
+
+  iniciarBackupNuvemAutomatico();
 }
 
 function fazerLogout() {
