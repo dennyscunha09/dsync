@@ -373,20 +373,102 @@ function carregarDados() {
 }
 
 // ===== LOGIN =====
-function fazerLogin() {
-  const u = document.getElementById('loginUsuario').value.trim();
-  const s = document.getElementById('loginSenha').value.trim();
+// function fazerLogin() {
+//   const u = document.getElementById('loginUsuario').value.trim();
+//   const s = document.getElementById('loginSenha').value.trim();
+//   const msg = document.getElementById('mensagemLogin');
+//   if (!u || !s) { msg.textContent = '⚠️ Preencha todos os campos!'; msg.style.display = 'block'; return; }
+//   const user = state.usuarios.find(x => x.nome === u && x.senha === s);
+//   if (!user) { msg.textContent = '❌ Usuário ou senha incorretos!'; msg.style.display = 'block'; return; }
+//   state.usuarioAtual = user;
+//   setData(STORAGE_KEYS.sessao, { usuarioId: user.id });
+//   const log = getData(STORAGE_KEYS.logAcessos, []);
+//   log.unshift({ usuario: user.nome, acao: 'Login', data: new Date().toLocaleString() });
+//   setData(STORAGE_KEYS.logAcessos, log.slice(0, 200));
+//   entrarApp();
+// }
+// Nova função de Login com Supabase
+async function fazerLoginSupabase() {
+  const email = document.getElementById('loginUsuario').value.trim();
+  const senha = document.getElementById('loginSenha').value;
   const msg = document.getElementById('mensagemLogin');
-  if (!u || !s) { msg.textContent = '⚠️ Preencha todos os campos!'; msg.style.display = 'block'; return; }
-  const user = state.usuarios.find(x => x.nome === u && x.senha === s);
-  if (!user) { msg.textContent = '❌ Usuário ou senha incorretos!'; msg.style.display = 'block'; return; }
-  state.usuarioAtual = user;
-  setData(STORAGE_KEYS.sessao, { usuarioId: user.id });
-  const log = getData(STORAGE_KEYS.logAcessos, []);
-  log.unshift({ usuario: user.nome, acao: 'Login', data: new Date().toLocaleString() });
-  setData(STORAGE_KEYS.logAcessos, log.slice(0, 200));
+
+  if (!email || !senha) {
+    msg.textContent = '⚠️ Preencha e-mail e senha!';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email,
+    password: senha,
+  });
+
+  if (error) {
+    msg.textContent = '❌ ' + error.message;
+    msg.style.display = 'block';
+    return;
+  }
+
+  usuarioSupabase = data.user;
+  msg.textContent = '✅ Login realizado!';
+  msg.style.display = 'block';
+
+  // Carrega os dados do backup da nuvem
+  await carregarDadosDoSupabase();
+
+  // Entra no app
   entrarApp();
 }
+
+// Função de Backup Automático (Salva o state no Supabase)
+async function fazerBackupSupabase() {
+  if (!usuarioSupabase) return; // Só salva se estiver logado
+
+  const stateParaSalvar = {
+    produtos: state.produtos,
+    prateleiras: state.prateleiras,
+    carga: state.carga,
+    historico: state.historico,
+    insumos: state.insumos,
+    // ... adicione outros arrays que você queira salvar
+  };
+
+  const { error } = await supabase
+    .from('backups')
+    .insert({
+      user_id: usuarioSupabase.id,
+      data: stateParaSalvar
+    });
+
+  if (error) {
+    console.error('Erro no backup:', error);
+  } else {
+    console.log('💾 Backup na nuvem realizado!');
+  }
+}
+
+// Carregar dados da nuvem ao fazer login
+async function carregarDadosDoSupabase() {
+  const { data, error } = await supabase
+    .from('backups')
+    .select('data')
+    .eq('user_id', usuarioSupabase.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (data && data.data) {
+    // Restaura o state com os dados da nuvem
+    state.produtos = data.data.produtos || [];
+    state.prateleiras = data.data.prateleiras || [];
+    // ... restaure os outros arrays
+    console.log('☁️ Dados carregados da nuvem!');
+  }
+}
+
+// Modifique o botão de login no HTML para chamar fazerLoginSupabase()
+// E no seu backup automático (setInterval), chame também fazerBackupSupabase()
 
 function entrarApp() {
   document.getElementById('loginScreen').style.display = 'none';
