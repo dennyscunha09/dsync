@@ -405,7 +405,7 @@ async function fazerLoginSupabase() {
   });
 
   if (error) {
-    msg.textContent = '❌ ' + error.message;
+    msg.textContent = 'AQUIDEUERRO!!! ' + error.message;
     msg.style.display = 'block';
     return;
   }
