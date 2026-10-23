@@ -388,7 +388,7 @@ function carregarDados() {
 //   entrarApp();
 // }
 // Nova função de Login com Supabase
-async function fazerLoginSupabase() {
+async function fazerLogin() {
   const email = document.getElementById('loginUsuario').value.trim();
   const senha = document.getElementById('loginSenha').value;
   const msg = document.getElementById('mensagemLogin');
@@ -399,26 +399,46 @@ async function fazerLoginSupabase() {
     return;
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email,
-    password: senha,
-  });
+  // Muda o texto do botão para você saber que está processando
+  const btn = document.querySelector('button[onclick="fazerLogin()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Entrando...'; }
+  msg.style.display = 'none';
 
-  if (error) {
-    msg.textContent = 'AQUIDEUERRO!!! ' + error.message;
+  try {
+    // Cria uma "corrida" entre o login e um timer de 10 segundos
+    const loginPromise = supabase.auth.signInWithPassword({
+      email: email,
+      password: senha,
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tempo esgotado. Verifique sua internet.')), 10000)
+    );
+
+    const { data, error } = await Promise.race([loginPromise, timeoutPromise]);
+
+    if (error) {
+      msg.textContent = '❌ ' + error.message;
+      msg.style.display = 'block';
+      if (btn) { btn.disabled = false; btn.textContent = '🔓 Entrar'; }
+      return;
+    }
+
+    // Login deu certo!
+    usuarioSupabase = data.user;
+    msg.textContent = '✅ Login realizado!';
     msg.style.display = 'block';
-    return;
+
+    await carregarDadosDoSupabase();
+    entrarApp();
+
+  } catch (err) {
+    // Se o timer de 10s estourar ou der erro de rede, cai aqui
+    console.error('Erro no login:', err);
+    msg.textContent = '❌ ' + err.message;
+    msg.style.display = 'block';
+    if (btn) { btn.disabled = false; btn.textContent = '🔓 Entrar'; }
   }
-
-  usuarioSupabase = data.user;
-  msg.textContent = '✅ Login realizado!';
-  msg.style.display = 'block';
-
-  // Carrega os dados do backup da nuvem
-  await carregarDadosDoSupabase();
-
-  // Entra no app
-  entrarApp();
 }
 
 // Função de Backup Automático (Salva o state no Supabase)
