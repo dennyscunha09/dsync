@@ -309,13 +309,42 @@ document.addEventListener('DOMContentLoaded', function () {
   carregarDados();
   carregarInsumos();
   carregarPedidoCarga();
-  const sessao = getData(STORAGE_KEYS.sessao, null);
-  if (sessao) {
-    state.usuarioAtual = state.usuarios.find(u => u.id === sessao.usuarioId);
-    if (state.usuarioAtual) { entrarApp(); return; }
-  }
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('appContent').style.display = 'none';
+
+  // Verifica se o usuário já está logado no Supabase
+if (window.supabase) {
+  window.supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      usuarioSupabase = session.user;
+      state.usuarioAtual = { 
+        id: session.user.id, 
+        nome: session.user.email, 
+        tipo: 'admin' 
+      };
+      console.log('✅ Sessão restaurada:', session.user.email);
+      entrarApp();
+      return;
+    }
+    // Se não tem sessão, mostra o login
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appContent').style.display = 'none';
+  });
+} else {
+  // Fallback se o supabase não carregou ainda
+  setTimeout(() => {
+    if (window.supabase) {
+      window.supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          usuarioSupabase = session.user;
+          state.usuarioAtual = { id: session.user.id, nome: session.user.email, tipo: 'admin' };
+          entrarApp();
+        } else {
+          document.getElementById('loginScreen').style.display = 'flex';
+          document.getElementById('appContent').style.display = 'none';
+        }
+      });
+    }
+  }, 1000);
+}
 });
 
 function carregarDados() {
@@ -399,23 +428,21 @@ async function fazerLoginSupabase() {
     return;
   }
 
-  // Muda o texto do botão para você saber que está processando
+  if (!window.supabase || !window.supabase.auth) {
+    msg.textContent = '❌ Supabase não carregou. Aguarde e tente novamente.';
+    msg.style.display = 'block';
+    return;
+  }
+
   const btn = document.querySelector('button[onclick="fazerLoginSupabase()"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Entrando...'; }
   msg.style.display = 'none';
 
   try {
-    // Cria uma "corrida" entre o login e um timer de 10 segundos
-    const loginPromise = supabase.auth.signInWithPassword({
+    const { data, error } = await window.supabase.auth.signInWithPassword({
       email: email,
       password: senha,
     });
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Tempo esgotado. Verifique sua internet.')), 10000)
-    );
-
-    const { data, error } = await Promise.race([loginPromise, timeoutPromise]);
 
     if (error) {
       msg.textContent = '❌ ' + error.message;
@@ -424,18 +451,17 @@ async function fazerLoginSupabase() {
       return;
     }
 
-    // Login deu certo!
     usuarioSupabase = data.user;
-    msg.textContent = '✅ Login realizado!';
-    msg.style.display = 'block';
-
-    await carregarDadosDoSupabase();
+    state.usuarioAtual = { id: data.user.id, nome: data.user.email, tipo: 'admin' };
+    
+    // Carrega os dados da nuvem antes de entrar
+    await carregarDaNuvem();
+    
     entrarApp();
 
   } catch (err) {
-    // Se o timer de 10s estourar ou der erro de rede, cai aqui
     console.error('Erro no login:', err);
-    msg.textContent = '❌ ' + err.message;
+    msg.textContent = '❌ ' + (err.message || 'Erro de conexão.');
     msg.style.display = 'block';
     if (btn) { btn.disabled = false; btn.textContent = '🔓 Entrar'; }
   }
@@ -5132,7 +5158,80 @@ function fecharScannerProduto() {
   }
   scannerProdutoCallback = null;
 }
+// Salvar dados na nuvem
+async function salvarNaNuvem() {
+  if (!window.supabase || !usuarioSupabase) return;
+  
+  const dados = {
+    produtos: state.produtos,
+    prateleiras: state.prateleiras,
+    carga: state.carga,
+    historico: state.historico,
+    insumos: state.insumos,
+    configInsumos: state.configInsumos,
+    produtoInsumoMap: state.produtoInsumoMap,
+    pedidosSeparar: state.pedidosSeparar,
+    pedidosFinalizados: state.pedidosFinalizados,
+    injecao: state.injecao,
+    injetando: state.injetando,
+    injetados: state.injetados,
+    materiaPrima: state.materiaPrima,
+    pedidoCargaAtual: state.pedidoCargaAtual
+  };
 
+  const { error } = await window.supabase
+    .from('backups')
+    .insert({ user_id: usuarioSupabase.id, data: dados });
+
+  if (error) {
+    console.error('❌ Erro ao salvar na nuvem:', error);
+  } else {
+    console.log('☁️ Backup na nuvem realizado!');
+    const el = document.getElementById('ultimoBackupNuvem');
+    if (el) el.textContent = new Date().toLocaleString('pt-BR');
+  }
+}
+
+// Carregar dados da nuvem
+async function carregarDaNuvem() {
+  if (!window.supabase || !usuarioSupabase) return;
+
+  const { data, error } = await window.supabase
+    .from('backups')
+    .select('data')
+    .eq('user_id', usuarioSupabase.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 = nenhum dado encontrado
+    console.error('❌ Erro ao carregar:', error);
+    return;
+  }
+
+  if (data && data.data) {
+    console.log('☁️ Dados carregados da nuvem!');
+    state.produtos = data.data.produtos || [];
+    state.prateleiras = data.data.prateleiras || [];
+    state.carga = data.data.carga || [];
+    state.historico = data.data.historico || [];
+    state.insumos = data.data.insumos || state.insumos;
+    state.configInsumos = data.data.configInsumos || state.configInsumos;
+    state.produtoInsumoMap = data.data.produtoInsumoMap || {};
+    state.pedidosSeparar = data.data.pedidosSeparar || [];
+    state.pedidosFinalizados = data.data.pedidosFinalizados || [];
+    state.injecao = data.data.injecao || [];
+    state.injetando = data.data.injetando || [];
+    state.injetados = data.data.injetados || [];
+    state.materiaPrima = data.data.materiaPrima || state.materiaPrima;
+    state.pedidoCargaAtual = data.data.pedidoCargaAtual || { ativo: false, codigo: '', itens: {} };
+
+    atualizarTudo();
+    mostrarToast('☁️ Dados sincronizados da nuvem!', 'success');
+  } else {
+    console.log('Nenhum backup na nuvem ainda. Começando vazio.');
+  }
+}
 // ============================================================
 // EVENTOS GLOBAIS E HOOKS
 // ============================================================
