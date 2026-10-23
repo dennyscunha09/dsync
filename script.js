@@ -388,7 +388,7 @@ function carregarDados() {
 //   entrarApp();
 // }
 // Nova função de Login com Supabase
-async function fazerLogin() {
+async function fazerLoginSupabase() {
   const email = document.getElementById('loginUsuario').value.trim();
   const senha = document.getElementById('loginSenha').value;
   const msg = document.getElementById('mensagemLogin');
