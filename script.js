@@ -400,7 +400,7 @@ async function fazerLoginSupabase() {
   }
 
   // Muda o texto do botão para você saber que está processando
-  const btn = document.querySelector('button[onclick="fazerLogin()"]');
+  const btn = document.querySelector('button[onclick="fazerLoginSupabase()"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Entrando...'; }
   msg.style.display = 'none';
 
