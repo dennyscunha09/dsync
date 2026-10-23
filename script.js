@@ -560,21 +560,59 @@ function fazerLogout() {
 function mostrarCriarConta() { document.getElementById('loginForm').style.display = 'none'; document.getElementById('criarContaForm').style.display = 'block'; document.getElementById('mensagemLogin').style.display = 'none'; }
 function mostrarLogin() { document.getElementById('loginForm').style.display = 'block'; document.getElementById('criarContaForm').style.display = 'none'; document.getElementById('mensagemLogin').style.display = 'none'; }
 
-function criarConta() {
-  const u = document.getElementById('novoUsuario').value.trim();
-  const s = document.getElementById('novaSenha').value;
-  const c = document.getElementById('confirmarSenha').value;
+async function criarConta() {
+  const email = document.getElementById('novoUsuario').value.trim();
+  const senha = document.getElementById('novaSenha').value;
+  const confirma = document.getElementById('confirmarSenha').value;
   const msg = document.getElementById('mensagemLogin');
-  if (!u || !s || !c) { msg.textContent = '⚠️ Preencha todos os campos!'; msg.style.display = 'block'; return; }
-  if (s.length < 4) { msg.textContent = '⚠️ Senha deve ter pelo menos 4 caracteres!'; msg.style.display = 'block'; return; }
-  if (s !== c) { msg.textContent = '❌ Senhas não coincidem!'; msg.style.display = 'block'; return; }
-  if (state.usuarios.find(x => x.nome === u)) { msg.textContent = '❌ Usuário já existe!'; msg.style.display = 'block'; return; }
-  salvarEstadoParaUndo();
-  state.usuarios.push({ id: Date.now().toString(), nome: u, senha: s, tipo: state.usuarios.length === 0 ? 'admin' : 'user' });
-  setData(STORAGE_KEYS.usuarios, state.usuarios);
-  msg.textContent = '✅ Conta criada! Faça login.';
-  msg.style.display = 'block'; msg.style.color = '#2ecc71';
-  setTimeout(() => { mostrarLogin(); document.getElementById('loginUsuario').value = u; msg.style.display = 'none'; msg.style.color = '#e74c3c'; }, 2000);
+
+  if (!email || !senha || !confirma) {
+    msg.textContent = '⚠️ Preencha todos os campos!';
+    msg.style.display = 'block';
+    return;
+  }
+  if (senha.length < 6) {
+    msg.textContent = '⚠️ Senha deve ter pelo menos 6 caracteres!';
+    msg.style.display = 'block';
+    return;
+  }
+  if (senha !== confirma) {
+    msg.textContent = '❌ Senhas não coincidem!';
+    msg.style.display = 'block';
+    return;
+  }
+  if (!window.supabase) {
+    msg.textContent = '❌ Supabase não carregou.';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.textContent = '⏳ Criando conta...';
+  msg.style.display = 'block';
+  msg.style.color = '#3b82f6';
+
+  const { data, error } = await window.supabase.auth.signUp({
+    email: email,
+    password: senha,
+  });
+
+  if (error) {
+    msg.textContent = '❌ ' + error.message;
+    msg.style.display = 'block';
+    msg.style.color = '#e74c3c';
+    return;
+  }
+
+  msg.textContent = '✅ Conta criada! Verifique seu e-mail se a confirmação estiver ativa.';
+  msg.style.display = 'block';
+  msg.style.color = '#2ecc71';
+
+  setTimeout(() => {
+    mostrarLogin();
+    document.getElementById('loginUsuario').value = email;
+    msg.style.display = 'none';
+    msg.style.color = '#e74c3c';
+  }, 3000);
 }
 
 function toggleSenha(id, el) {
