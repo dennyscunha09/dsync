@@ -1,5 +1,5 @@
 // ============================================================
-// D.Sync - SISTEMA COMPLETO CORRIGIDO + SCANNERS
+// D.Sync - SISTEMA COMPLETO COM SUPABASE + SCANNERS
 // ============================================================
 
 const state = {
@@ -310,44 +310,37 @@ document.addEventListener('DOMContentLoaded', function () {
   carregarInsumos();
   carregarPedidoCarga();
 
-  // Verifica se o usuário já está logado no Supabase
-if (window.supabase) {
-  window.supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session) {
-      usuarioSupabase = session.user;
-      state.usuarioAtual = { 
-        id: session.user.id, 
-        nome: session.user.email, 
-        tipo: 'admin' 
-      };
-      console.log('✅ Sessão restaurada:', session.user.email);
-      entrarApp();
-      return;
-    }
-    // Se não tem sessão, mostra o login
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('appContent').style.display = 'none';
-  });
-} else {
-  // Fallback se o supabase não carregou ainda
-  setTimeout(() => {
-    if (window.supabase) {
-      window.supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          usuarioSupabase = session.user;
-          state.usuarioAtual = { id: session.user.id, nome: session.user.email, tipo: 'admin' };
-          entrarApp();
-        } else {
-          document.getElementById('loginScreen').style.display = 'flex';
-          document.getElementById('appContent').style.display = 'none';
-        }
-      });
-    }
-  }, 1000);
-}
-});
-
-function carregarDados() {
+  // Tenta recuperar sessão do Supabase
+  if (window.supabase) {
+    window.supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        usuarioSupabase = session.user;
+        state.usuarioAtual = { id: session.user.id, nome: session.user.email, tipo: 'admin' };
+        console.log('✅ Sessão restaurada:', session.user.email);
+        entrarApp();
+        return;
+      }
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('appContent').style.display = 'none';
+    });
+  } else {
+    // Fallback
+    setTimeout(() => {
+      if (window.supabase) {
+        window.supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            usuarioSupabase = session.user;
+            state.usuarioAtual = { id: session.user.id, nome: session.user.email, tipo: 'admin' };
+            entrarApp();
+          } else {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('appContent').style.display = 'none';
+          }
+        });
+      }
+    }, 1000);
+  }
+});function carregarDados() {
   state.produtos = getData(STORAGE_KEYS.produtos, []);
   state.prateleiras = getData(STORAGE_KEYS.prateleiras, []);
   state.carga = getData(STORAGE_KEYS.carga, []);
@@ -401,22 +394,8 @@ function carregarDados() {
   atualizarListasPedidos();
 }
 
-// ===== LOGIN =====
-// function fazerLogin() {
-//   const u = document.getElementById('loginUsuario').value.trim();
-//   const s = document.getElementById('loginSenha').value.trim();
-//   const msg = document.getElementById('mensagemLogin');
-//   if (!u || !s) { msg.textContent = '⚠️ Preencha todos os campos!'; msg.style.display = 'block'; return; }
-//   const user = state.usuarios.find(x => x.nome === u && x.senha === s);
-//   if (!user) { msg.textContent = '❌ Usuário ou senha incorretos!'; msg.style.display = 'block'; return; }
-//   state.usuarioAtual = user;
-//   setData(STORAGE_KEYS.sessao, { usuarioId: user.id });
-//   const log = getData(STORAGE_KEYS.logAcessos, []);
-//   log.unshift({ usuario: user.nome, acao: 'Login', data: new Date().toLocaleString() });
-//   setData(STORAGE_KEYS.logAcessos, log.slice(0, 200));
-//   entrarApp();
-// }
-// Nova função de Login com Supabase
+// ===== SUPABASE: LOGIN, CADASTRO E BACKUP =====
+
 async function fazerLoginSupabase() {
   const email = document.getElementById('loginUsuario').value.trim();
   const senha = document.getElementById('loginSenha').value;
@@ -466,99 +445,6 @@ async function fazerLoginSupabase() {
     if (btn) { btn.disabled = false; btn.textContent = '🔓 Entrar'; }
   }
 }
-
-// Função de Backup Automático (Salva o state no Supabase)
-async function fazerBackupSupabase() {
-  if (!usuarioSupabase) return; // Só salva se estiver logado
-
-  const stateParaSalvar = {
-    produtos: state.produtos,
-    prateleiras: state.prateleiras,
-    carga: state.carga,
-    historico: state.historico,
-    insumos: state.insumos,
-    // ... adicione outros arrays que você queira salvar
-  };
-
-  const { error } = await supabase
-    .from('backups')
-    .insert({
-      user_id: usuarioSupabase.id,
-      data: stateParaSalvar
-    });
-
-  if (error) {
-    console.error('Erro no backup:', error);
-  } else {
-    console.log('💾 Backup na nuvem realizado!');
-  }
-}
-
-// Carregar dados da nuvem ao fazer login
-async function carregarDadosDoSupabase() {
-  const { data, error } = await supabase
-    .from('backups')
-    .select('data')
-    .eq('user_id', usuarioSupabase.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (data && data.data) {
-    // Restaura o state com os dados da nuvem
-    state.produtos = data.data.produtos || [];
-    state.prateleiras = data.data.prateleiras || [];
-    // ... restaure os outros arrays
-    console.log('☁️ Dados carregados da nuvem!');
-  }
-}
-
-// Modifique o botão de login no HTML para chamar fazerLoginSupabase()
-// E no seu backup automático (setInterval), chame também fazerBackupSupabase()
-
-function entrarApp() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appContent').style.display = 'block';
-  document.getElementById('perfilUsuario').textContent = '👤 ' + state.usuarioAtual.nome;
-  document.getElementById('perfilNivel').textContent = state.usuarioAtual.tipo === 'admin' ? '👑 Admin' : '👤 Usuário';
-  document.getElementById('tabUsuarios').style.display = state.usuarioAtual.tipo === 'admin' ? 'inline-block' : 'none';
-
-  document.body.classList.remove('tab-dashboard', 'tab-estoque', 'tab-pedidos', 'tab-injecao', 'tab-usuarios');
-  document.body.classList.add('tab-dashboard');
-
-  carregarTema();
-  carregarPedidoCarga();
-  inicializarApp();
-  iniciarBackupAutomatico();
-  iniciarTimerProducao();
-
-  iniciarBackupNuvemAutomatico();
-}
-
-function fazerLogout() {
-  if (state.usuarioAtual) {
-    const log = getData(STORAGE_KEYS.logAcessos, []);
-    log.unshift({ usuario: state.usuarioAtual.nome, acao: 'Logout', data: new Date().toLocaleString() });
-    setData(STORAGE_KEYS.logAcessos, log.slice(0, 200));
-  }
-  localStorage.removeItem(STORAGE_KEYS.sessao);
-  state.usuarioAtual = null;
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('appContent').style.display = 'none';
-
-  if (intervalBackupNuvem) {
-    clearInterval(intervalBackupNuvem);
-    intervalBackupNuvem = null;
-  }
-  
-  localStorage.removeItem(STORAGE_KEYS.sessao);
-  state.usuarioAtual = null;
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('appContent').style.display = 'none';
-}
-
-function mostrarCriarConta() { document.getElementById('loginForm').style.display = 'none'; document.getElementById('criarContaForm').style.display = 'block'; document.getElementById('mensagemLogin').style.display = 'none'; }
-function mostrarLogin() { document.getElementById('loginForm').style.display = 'block'; document.getElementById('criarContaForm').style.display = 'none'; document.getElementById('mensagemLogin').style.display = 'none'; }
 
 async function criarConta() {
   const email = document.getElementById('novoUsuario').value.trim();
@@ -615,6 +501,127 @@ async function criarConta() {
   }, 3000);
 }
 
+// Salvar dados na nuvem
+async function salvarNaNuvem() {
+  if (!window.supabase || !usuarioSupabase) {
+    mostrarToast('❌ Faça login para salvar na nuvem!', 'error');
+    return;
+  }
+  
+  const dados = {
+    produtos: state.produtos,
+    prateleiras: state.prateleiras,
+    carga: state.carga,
+    historico: state.historico,
+    insumos: state.insumos,
+    configInsumos: state.configInsumos,
+    produtoInsumoMap: state.produtoInsumoMap,
+    pedidosSeparar: state.pedidosSeparar,
+    pedidosFinalizados: state.pedidosFinalizados,
+    injecao: state.injecao,
+    injetando: state.injetando,
+    injetados: state.injetados,
+    materiaPrima: state.materiaPrima,
+    pedidoCargaAtual: state.pedidoCargaAtual
+  };
+
+  const { error } = await window.supabase
+    .from('backups')
+    .insert({ user_id: usuarioSupabase.id, data: dados });
+
+  if (error) {
+    console.error('❌ Erro ao salvar na nuvem:', error);
+    mostrarToast('❌ Erro ao salvar na nuvem!', 'error');
+  } else {
+    console.log('☁️ Backup na nuvem realizado!');
+    mostrarToast('☁️ Backup na nuvem realizado!', 'success');
+    const el = document.getElementById('ultimoBackupNuvem');
+    if (el) el.textContent = new Date().toLocaleString('pt-BR');
+  }
+}
+
+// Carregar dados da nuvem
+async function carregarDaNuvem() {
+  if (!window.supabase || !usuarioSupabase) return;
+
+  const { data, error } = await window.supabase
+    .from('backups')
+    .select('data')
+    .eq('user_id', usuarioSupabase.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('❌ Erro ao carregar:', error);
+    return;
+  }
+
+  if (data && data.data) {
+    console.log('☁️ Dados carregados da nuvem!');
+    state.produtos = data.data.produtos || [];
+    state.prateleiras = data.data.prateleiras || [];
+    state.carga = data.data.carga || [];
+    state.historico = data.data.historico || [];
+    state.insumos = data.data.insumos || state.insumos;
+    state.configInsumos = data.data.configInsumos || state.configInsumos;
+    state.produtoInsumoMap = data.data.produtoInsumoMap || {};
+    state.pedidosSeparar = data.data.pedidosSeparar || [];
+    state.pedidosFinalizados = data.data.pedidosFinalizados || [];
+    state.injecao = data.data.injecao || [];
+    state.injetando = data.data.injetando || [];
+    state.injetados = data.data.injetados || [];
+    state.materiaPrima = data.data.materiaPrima || state.materiaPrima;
+    state.pedidoCargaAtual = data.data.pedidoCargaAtual || { ativo: false, codigo: '', itens: {} };
+
+    atualizarTudo();
+    mostrarToast('☁️ Dados sincronizados da nuvem!', 'success');
+  } else {
+    console.log('Nenhum backup na nuvem ainda. Começando vazio.');
+  }
+}
+
+// ===== ENTRAR NO APP =====
+function entrarApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'block';
+  document.getElementById('perfilUsuario').textContent = '👤 ' + (state.usuarioAtual?.nome || 'Usuário');
+  document.getElementById('perfilNivel').textContent = state.usuarioAtual?.tipo === 'admin' ? '👑 Admin' : '👤 Usuário';
+  document.getElementById('tabUsuarios').style.display = state.usuarioAtual?.tipo === 'admin' ? 'inline-block' : 'none';
+
+  document.body.classList.remove('tab-dashboard', 'tab-estoque', 'tab-pedidos', 'tab-injecao', 'tab-usuarios');
+  document.body.classList.add('tab-dashboard');
+
+  carregarTema();
+  carregarPedidoCarga();
+  inicializarApp();
+  iniciarBackupAutomatico();
+  iniciarTimerProducao();
+
+  // Configura o backup automático na nuvem
+  if (window.supabase && usuarioSupabase) {
+    setInterval(() => {
+      if (usuarioSupabase) salvarNaNuvem();
+    }, 300000); // 5 minutos
+  }
+}
+
+function fazerLogout() {
+  if (window.supabase) {
+    window.supabase.auth.signOut().then(() => {
+      console.log('Logout do Supabase realizado');
+    });
+  }
+  usuarioSupabase = null;
+  localStorage.removeItem(STORAGE_KEYS.sessao);
+  state.usuarioAtual = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'none';
+}
+
+function mostrarCriarConta() { document.getElementById('loginForm').style.display = 'none'; document.getElementById('criarContaForm').style.display = 'block'; document.getElementById('mensagemLogin').style.display = 'none'; }
+function mostrarLogin() { document.getElementById('loginForm').style.display = 'block'; document.getElementById('criarContaForm').style.display = 'none'; document.getElementById('mensagemLogin').style.display = 'none'; }
+
 function toggleSenha(id, el) {
   const i = document.getElementById(id);
   if (i.type === 'password') { i.type = 'text'; el.textContent = '🙈'; }
@@ -649,22 +656,11 @@ function mostrarToast(mensagem, tipo = 'info') {
   t.timeout = setTimeout(() => { t.style.display = 'none'; }, 4000);
 }
 
-// ===== BACKUP AUTOMÁTICO =====
+// ===== BACKUP AUTOMÁTICO LOCAL =====
 function iniciarBackupAutomatico() {
   if (state.backupInterval) clearInterval(state.backupInterval);
   state.backupInterval = setInterval(() => {
     saveData(); salvarInsumos(); salvarPedidoCarga();
-    setData(STORAGE_KEYS.backupAuto, {
-      data: new Date().toISOString(),
-      produtos: state.produtos, prateleiras: state.prateleiras,
-      carga: state.carga, historico: state.historico,
-      insumos: state.insumos, configInsumos: state.configInsumos,
-      produtoInsumoMap: state.produtoInsumoMap,
-      pedidosSeparar: state.pedidosSeparar, pedidosFinalizados: state.pedidosFinalizados,
-      injecao: state.injecao, injetando: state.injetando,
-      injetados: state.injetados, materiaPrima: state.materiaPrima,
-      pedidoCargaAtual: state.pedidoCargaAtual
-    });
   }, 300000);
 }
 
@@ -749,7 +745,7 @@ function inicializarApp() {
   verificarEstoque();
   renderizarInsumos();
   verificarAlertasInsumos();
-  mostrarToast('✅ Bem-vindo, ' + state.usuarioAtual.nome + '!', 'success');
+  mostrarToast('✅ Bem-vindo, ' + (state.usuarioAtual?.nome || 'Usuário') + '!', 'success');
 }
 
 // ===== INSUMOS =====
@@ -856,6 +852,7 @@ function verificarAlertasInsumos() {
   }
   return alertas;
 }
+// ===== INSUMOS MODAL =====
 function abrirModalInsumos() {
   let linhas = '';
   state.produtos.forEach(p => {
@@ -1280,7 +1277,7 @@ function salvarCorPosicao() {
   mostrarToast('✅ Cor aplicada na posição!', 'success');
 }
 
-// ===== ABRIR MODAL POSIÇÃO VAZIA =====
+// ===== ADICIONAR POSIÇÃO VAZIA — FLUXO COM SCANNER =====
 function abrirAdicionarPosicao(shelfId, posNum) {
   const shelf = state.prateleiras.find(x => x.id === shelfId);
   if (!shelf) { alert('❌ Prateleira não encontrada!'); return; }
@@ -1291,8 +1288,6 @@ function abrirAdicionarPosicao(shelfId, posNum) {
     produtoId: null,
     produtoIdentificado: null
   };
-
-  console.log('📂 [abrirAdicionarPosicao]', JSON.stringify(state.currentPosicaoEdit));
 
   document.getElementById('modalPosicaoTitle').textContent = `➕ Posição ${posNum} — ${shelf.nome}`;
   document.getElementById('modalPosicaoBody').innerHTML = `
@@ -1340,19 +1335,10 @@ function abrirAdicionarPosicao(shelfId, posNum) {
 function buscarProdutoParaPosicao() {
   const input = document.getElementById('posCodigoProduto');
   const info = document.getElementById('posProdutoIdentificado');
-  if (!input || !info) {
-    alert('❌ ERRO: Campo de código não encontrado no DOM!');
-    return;
-  }
+  if (!input || !info) return;
 
   const codRaw = input.value.trim();
   const cod = codRaw.toUpperCase();
-
-  console.log('═══════════════════════════════════════════');
-  console.log('🔍 [buscarProdutoParaPosicao] INICIANDO');
-  console.log('Código bruto:', JSON.stringify(codRaw));
-  console.log('Código normalizado:', JSON.stringify(cod));
-  console.log('Total de produtos cadastrados:', state.produtos.length);
 
   if (!cod) {
     info.innerHTML = '<span style="color:var(--danger);">❌ Digite ou escaneie um código!</span>';
@@ -1369,7 +1355,6 @@ function buscarProdutoParaPosicao() {
     const bc = norm(p.barcode);
     return (ci && ci === codNorm) || (bc && bc === codNorm);
   });
-  console.log('🔍 [1] Busca exata:', produto ? `✅ ${produto.nome}` : '❌');
 
   if (!produto) {
     produto = state.produtos.find(p => {
@@ -1379,15 +1364,7 @@ function buscarProdutoParaPosicao() {
       return (ci && ci.includes(codNorm)) || (bc && bc.includes(codNorm)) ||
              (ci && codNorm.includes(ci)) || (bc && codNorm.includes(bc));
     });
-    console.log('🔍 [2] Busca parcial:', produto ? `✅ ${produto.nome}` : '❌');
   }
-
-  if (!produto) {
-    produto = state.produtos.find(p => norm(p.nome).includes(codNorm));
-    console.log('🔍 [3] Busca por nome:', produto ? `✅ ${produto.nome}` : '❌');
-  }
-
-  console.log('═══════════════════════════════════════════');
 
   if (!produto) {
     info.innerHTML = `
@@ -1417,11 +1394,6 @@ function buscarProdutoParaPosicao() {
   if (state.currentPosicaoEdit) {
     state.currentPosicaoEdit.produtoIdentificado = produto.id;
     state.currentPosicaoEdit.produtoId = produto.id;
-    console.log('✅ state.currentPosicaoEdit atualizado:', JSON.parse(JSON.stringify(state.currentPosicaoEdit)));
-  } else {
-    console.error('❌ ERRO: state.currentPosicaoEdit é null!');
-    alert('❌ ERRO: Estado da posição perdido. Feche e reabra o modal.');
-    return;
   }
 
   const locs = getProductLocations(produto.id);
@@ -1507,15 +1479,10 @@ function abrirEditarPosicao(shelfId, produtoId, posicao) {
 
 // ===== SALVAR POSIÇÃO =====
 function salvarPosicao() {
-  console.log('═══════════════════════════════════════════');
-  console.log('💾 [salvarPosicao] INICIANDO');
-
   if (!state.currentPosicaoEdit) {
     alert('❌ ERRO: Nenhuma posição em edição! Feche o modal e clique em ➕ novamente.');
     return;
   }
-
-  console.log('state.currentPosicaoEdit:', JSON.parse(JSON.stringify(state.currentPosicaoEdit)));
 
   const { shelfId, posicaoNum } = state.currentPosicaoEdit;
   const s = state.prateleiras.find(x => x.id === shelfId);
@@ -1526,7 +1493,6 @@ function salvarPosicao() {
 
   const qtdInput = document.getElementById('posQuantidade');
   const nq = parseInt(qtdInput?.value) || 0;
-  console.log('Quantidade digitada:', nq);
 
   if (nq < 0) {
     alert('❌ Quantidade inválida!');
@@ -1538,12 +1504,9 @@ function salvarPosicao() {
          || (document.getElementById('posProdutoSelect')?.value)
          || null;
 
-  console.log('PID inicial:', pid);
-
   if (!pid) {
     const inputCod = document.getElementById('posCodigoProduto');
     const codDigitado = (inputCod?.value || '').trim();
-    console.log('Tentando buscar pelo código digitado:', JSON.stringify(codDigitado));
 
     if (codDigitado) {
       const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, '').trim();
@@ -1568,12 +1531,9 @@ function salvarPosicao() {
         pid = produtoAchado.id;
         state.currentPosicaoEdit.produtoIdentificado = pid;
         state.currentPosicaoEdit.produtoId = pid;
-        console.log('✅ Produto encontrado na hora de salvar:', produtoAchado.nome, '| PID:', pid);
       }
     }
   }
-
-  console.log('PID FINAL:', pid);
 
   if (!pid) {
     alert('❌ NENHUM PRODUTO IDENTIFICADO!\n\nEscaneie o código de barras ou selecione na lista antes de salvar.');
@@ -1586,12 +1546,8 @@ function salvarPosicao() {
     return;
   }
 
-  console.log('✅ Produto:', produto.nome);
-
   const isAdicao = !state.currentPosicaoEdit.quantidadeAtual
                 && !s.produtos.find(x => parseInt(x.posicao) === parseInt(posicaoNum));
-
-  console.log('Modo:', isAdicao ? 'ADIÇÃO' : 'EDIÇÃO');
 
   if (isAdicao) {
     if (nq <= 0) {
@@ -1641,7 +1597,6 @@ function salvarPosicao() {
     closeModalPosicao();
     atualizarTudo();
     mostrarToast(`✅ ${nq} cx de ${produto.nome} → ${s.nome}${posicaoNum}`, 'success');
-    console.log('✅ ADIÇÃO CONCLUÍDA!');
     return;
   }
 
@@ -1670,7 +1625,6 @@ function salvarPosicao() {
   closeModalPosicao();
   atualizarTudo();
   mostrarToast('✅ Posição atualizada!', 'success');
-  console.log('✅ EDIÇÃO CONCLUÍDA!');
 }
 
 function closeModalPosicao() { document.getElementById('modalPosicao').style.display = 'none'; state.currentPosicaoEdit = null; }
@@ -1972,8 +1926,7 @@ function atualizarPosicoesAddExistente() {
   for (let i = 1; i <= (s.numPosicoes || 12); i++) {
     if (!ocup.includes(i.toString())) sp.innerHTML += `<option value="${i}">Posição ${i}</option>`;
   }
-}
-// ===== CARGA =====
+}// ===== CARGA =====
 function adicionarCarga(shelfId, produtoId, posicao) {
   const produto = state.produtos.find(p => p.id === produtoId);
   if (!produto) return;
@@ -2647,7 +2600,7 @@ function exportarExcel() {
   mostrarToast('📥 Exportado!', 'success');
 }
 
-function fazerBackup() { fazerBackupSupabase(); }
+function fazerBackup() { salvarNaNuvem(); }
 
 function searchProducts() {
   const input = document.getElementById('searchInput');
@@ -2794,8 +2747,9 @@ function mostrarSubAba(subAba) {
   else if (subAba === 'injetando') renderizarInjetando();
   else if (subAba === 'injetados') renderizarInjetados();
   else if (subAba === 'materiaprima') renderizarMateriaPrima();
-}
-// ===== INJEÇÃO =====
+}// ============================================================
+// INJEÇÃO
+// ============================================================
 function renderizarInjecao() {
   const c = document.getElementById('injecaoContainer');
   if (!c) return;
@@ -3145,7 +3099,9 @@ function verificarAlertasInjecao() {
   console.log(`🔔 ${produtosSemMaquina.length} produto(s) aguardando injeção`);
 }
 
-// ===== PEDIDOS DE SEPARAÇÃO =====
+// ============================================================
+// PEDIDOS DE SEPARAÇÃO
+// ============================================================
 let pedidoAtualEmEdicao = null;
 
 function novoPedido() {
@@ -3372,7 +3328,9 @@ function excluirPedido(codigo, tipo) {
   mostrarToast('🗑️ Excluído!', 'warning');
 }
 
-// ===== PEDIDO DE CARGA PERSISTENTE =====
+// ============================================================
+// PEDIDO DE CARGA PERSISTENTE
+// ============================================================
 function montarPedidoCarga() {
   carregarPedidoCarga();
   const c = document.getElementById('pedidoCargaContainer');
@@ -3666,7 +3624,9 @@ function cancelarPedidoCarga() {
   mostrarToast('🗑️ Pedido cancelado!', 'warning');
 }
 
-// ===== AUXILIARES =====
+// ============================================================
+// AUXILIARES
+// ============================================================
 function buscarDisponibilidadeProduto(produtoId) {
   const locais = [];
   let total = 0;
@@ -3731,7 +3691,9 @@ function atualizarTudo() {
   saveData();
 }
 
-// ===== PRATELEIRAS PADRÃO =====
+// ============================================================
+// PRATELEIRAS PADRÃO
+// ============================================================
 function criarPrateleirasPadrao() {
   state.prateleiras = [
     { id: 'A', nome: 'A', cor: '#FF6B6B', numPosicoes: 12, produtos: [], codigoBarras: 'PRAT-A' },
@@ -3755,7 +3717,9 @@ function criarProdutosExemplo() {
   setData(STORAGE_KEYS.produtos, state.produtos);
 }
 
-// ===== CÓDIGO DE BARRAS DAS PRATELEIRAS =====
+// ============================================================
+// CÓDIGO DE BARRAS DAS PRATELEIRAS
+// ============================================================
 function gerarCodigoPrateleira(id) { return `PRAT-${id}`; }
 
 function atualizarCodigosPrateleiras() {
@@ -3788,7 +3752,9 @@ function imprimirEtiquetas() {
   win.document.close();
 }
 
-// ===== MOVIMENTAÇÃO COM PRODUTO =====
+// ============================================================
+// MOVIMENTAÇÃO COM PRODUTO
+// ============================================================
 let movimentacaoOrigem = null;
 let movimentacaoDestino = null;
 
@@ -3928,7 +3894,9 @@ function confirmarMovimentacao() {
   mostrarToast('✅ Movimentado!', 'success');
 }
 
-// ===== ADICIONAR POR CÓDIGO DE BARRAS =====
+// ============================================================
+// ADICIONAR POR CÓDIGO DE BARRAS
+// ============================================================
 function abrirAdicionarPorCodigo() {
   const modal = document.getElementById('modalAdicionarPorCodigo');
   if (!modal) return;
@@ -4056,856 +4024,149 @@ function confirmarAdicionarPorCodigo() {
   mostrarToast(`✅ ${q} cx de ${produtoSelecionadoAddPorCodigo.nome} adicionadas!`, 'success');
   produtoSelecionadoAddPorCodigo = null;
 }
+
 // ============================================================
-// EXPORTAÇÃO PDF (jsPDF + autoTable)
+// SCANNER DE PRODUTO (código de barras)
 // ============================================================
+let html5QrCodeScannerProduto = null;
+let scannerProdutoCallback = null;
 
-function getJSDateStr() { return new Date().toLocaleString('pt-BR'); }
-function getJSDateSlug() { return new Date().toISOString().split('T')[0]; }
-
-function sanitizarParaPDF(texto) {
-  if (texto === null || texto === undefined) return '';
-  let s = String(texto);
-  s = s.replace(/♻️?/g, '(REC)');
-  s = s.replace(/⚠️?/g, '!');
-  s = s.replace(/✅ ?/g, '');
-  s = s.replace(/🛍️?/g, '');
-  s = s.replace(/📦/g, '');
-  s = s.replace(/📋/g, '');
-  s = s.replace(/📄/g, '');
-  s = s.replace(/🚛/g, '');
-  s = s.replace(/📊/g, '');
-  s = s.replace(/💉/g, '');
-  s = s.replace(/👥/g, '');
-  s = s.replace(/⏸️?/g, '');
-  s = s.replace(/▶️?/g, '');
-  s = s.replace(/⏳/g, '');
-  s = s.replace(/🎉/g, '');
-  s = s.replace(/💡/g, '');
-  s = s.replace(/🔔/g, '');
-  s = s.replace(/📭/g, '');
-  s = s.replace(/🔄/g, '');
-  s = s.replace(/🔍/g, '');
-  s = s.replace(/👑/g, '');
-  s = s.replace(/👤/g, '');
-  s = s.replace(/[^\x00-\xFF]/g, '');
-  s = s.replace(/&/g, '&amp;');
-  s = s.replace(/</g, '&lt;');
-  s = s.replace(/>/g, '&gt;');
-  return s.trim();
-}
-
-function autoTableSeguro(doc, options) {
-  const opts = Object.assign({}, options);
-  if (opts.head) opts.head = opts.head.map(row => row.map(cell => sanitizarParaPDF(cell)));
-  if (opts.body) opts.body = opts.body.map(row => row.map(cell => sanitizarParaPDF(cell)));
-  if (opts.foot) opts.foot = opts.foot.map(row => row.map(cell => sanitizarParaPDF(cell)));
-  return doc.autoTable(opts);
-}
-
-function exportarEstoquePDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(26, 43, 76);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Relatorio de Estoque', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  const totalProdutos = state.produtos.length;
-  const totalUnidades = state.produtos.reduce((a, p) => a + (p.quantidade || 0), 0);
-  const comEstoque = state.produtos.filter(p => (p.quantidade || 0) > 0).length;
-  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-  doc.text(`Total de produtos cadastrados: ${totalProdutos}`, 14, 40);
-  doc.text(`Produtos com estoque: ${comEstoque}`, 14, 46);
-  doc.text(`Total de unidades no estoque: ${totalUnidades}`, 14, 52);
-
-  let yOffset = 60;
-  state.prateleiras.forEach(shelf => {
-    const produtosShelf = shelf.produtos || [];
-    if (produtosShelf.length === 0) return;
-    doc.setFillColor(240, 242, 245);
-    doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(26, 43, 76);
-    doc.text(sanitizarParaPDF(`Prateleira ${shelf.nome}`), 16, yOffset);
-    yOffset += 2;
-    const linhas = produtosShelf
-      .sort((a, b) => parseInt(a.posicao) - parseInt(b.posicao))
-      .map(p => {
-        const prod = state.produtos.find(x => x.id === p.id);
-        return [`Posicao ${p.posicao}`, prod ? prod.nome : '(removido)', prod ? (prod.codigoInterno || '-') : '-', String(p.quantidade), p.modeloCaixa ? `Caixa ${p.modeloCaixa}` : '-'];
-      });
-    autoTableSeguro(doc, {
-      startY: yOffset + 3,
-      head: [['Posicao', 'Produto', 'Codigo', 'Qtd (cx)', 'Caixa']],
-      body: linhas, theme: 'grid',
-      headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: 30 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14, right: 14 },
-    });
-    yOffset = doc.lastAutoTable.finalY + 10;
-    if (yOffset > 250) { doc.addPage(); yOffset = 20; }
-  });
-
-  const semEstoque = state.produtos.filter(p => !getProductLocations(p.id).length);
-  if (semEstoque.length > 0) {
-    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(220, 38, 38);
-    doc.text(sanitizarParaPDF('Produtos sem localizacao definida'), 14, yOffset);
-    yOffset += 3;
-    autoTableSeguro(doc, {
-      startY: yOffset + 3,
-      head: [['Produto', 'Codigo', 'Disponivel']],
-      body: semEstoque.map(p => [p.nome, p.codigoInterno || '-', String(p.quantidade || 0)]),
-      theme: 'grid',
-      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: 30 },
-      margin: { left: 14, right: 14 },
-    });
-  }
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync - Sistema de Estoque', 14, 290);
-  }
-  doc.save(`estoque_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF do estoque gerado!', 'success');
-}
-
-function exportarInsumosPDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(26, 43, 76);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Relatorio de Insumos', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
-  doc.text('Estoque Consolidado', 14, 42);
-
-  autoTableSeguro(doc, {
-    startY: 45,
-    head: [['Insumo', 'Estoque', 'Alerta Minimo', 'Situacao']],
-    body: [
-      ['Caixa Modelo A', String(state.insumos.caixaModeloA), String(state.configInsumos.alertaCaixaModeloA), state.insumos.caixaModeloA <= state.configInsumos.alertaCaixaModeloA ? 'BAIXO' : 'OK'],
-      ['Caixa Modelo B', String(state.insumos.caixaModeloB), String(state.configInsumos.alertaCaixaModeloB), state.insumos.caixaModeloB <= state.configInsumos.alertaCaixaModeloB ? 'BAIXO' : 'OK'],
-      ['Embalagem 40x50', String(state.insumos.embalagem40x50 || 0), String(state.configInsumos.alertaEmbalagem40x50), (state.insumos.embalagem40x50 || 0) <= state.configInsumos.alertaEmbalagem40x50 ? 'BAIXO' : 'OK'],
-    ],
-    theme: 'grid',
-    headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 10 },
-    bodyStyles: { fontSize: 10, textColor: 30 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center', fontStyle: 'bold' } },
-  });
-
-  let yOffset = doc.lastAutoTable.finalY + 12;
-  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
-  doc.text('Configuracao por Produto', 14, yOffset);
-  yOffset += 3;
-
-  const linhasProdutos = state.produtos.map(p => {
-    const config = state.produtoInsumoMap[p.id] || { modeloCaixa: 'A', embalagemPorCaixa: 25, tipoEmbalagem: 'individual' };
-    const usa40 = usaEmbalagem40x50(p);
-    const estoque = usa40 ? (state.insumos.embalagem40x50 || 0) : (state.insumos.embalagens[p.id] || 0);
-    const alerta = usa40 ? state.configInsumos.alertaEmbalagem40x50
-      : (state.configInsumos.alertaEmbalagemPorProduto?.[p.id] !== undefined ? state.configInsumos.alertaEmbalagemPorProduto[p.id] : state.configInsumos.alertaEmbalagemPadrao);
-    const baixo = estoque <= alerta;
-    return [p.nome, `Caixa ${config.modeloCaixa}`, usa40 ? '40x50' : 'Individual', String(config.embalagemPorCaixa), String(estoque), String(alerta), baixo ? 'BAIXO' : 'OK'];
-  });
-
-  autoTableSeguro(doc, {
-    startY: yOffset + 3,
-    head: [['Produto', 'Caixa', 'Embalagem', 'Emb/cx', 'Estoque', 'Alerta', 'Status']],
-    body: linhasProdutos, theme: 'grid',
-    headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-    bodyStyles: { fontSize: 8, textColor: 30 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' } },
-  });
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync - Sistema de Insumos', 14, 290);
-  }
-  doc.save(`insumos_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF dos insumos gerado!', 'success');
-}
-
-function exportarGraficoPDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  if (!state.chart) { mostrarToast('❌ Nenhum gráfico gerado ainda!', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(26, 43, 76);
-  doc.rect(0, 0, 297, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Relatorio Grafico de Estoque', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  try {
-    const imgData = state.chart.toBase64Image('image/png', 1);
-    doc.addImage(imgData, 'PNG', 14, 38, 200, 130);
-  } catch (e) {
-    doc.setTextColor(200, 0, 0);
-    doc.text('Nao foi possivel capturar o grafico.', 14, 45);
-  }
-
-  const com = state.produtos.filter(p => p.quantidade > 0);
-  const totalUnid = com.reduce((a, p) => a + p.quantidade, 0);
-  const totalReservado = state.carga.reduce((a, c) => a + c.quantidade, 0);
-  const media = com.length > 0 ? Math.round(totalUnid / com.length) : 0;
-  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(26, 43, 76);
-  doc.text('Estatisticas', 222, 45);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.setTextColor(0, 0, 0);
-  doc.text(`Produtos com estoque: ${com.length}`, 222, 55);
-  doc.text(`Total de unidades: ${totalUnid}`, 222, 62);
-  doc.text(`Reservado para carga: ${totalReservado}`, 222, 69);
-  doc.text(`Media por produto: ${media}`, 222, 76);
-
-  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(26, 43, 76);
-  doc.text('Detalhamento por Produto', 14, 180);
-
-  const linhas = state.produtos
-    .filter(p => (p.quantidade || 0) > 0)
-    .sort((a, b) => (b.quantidade || 0) - (a.quantidade || 0))
-    .map(p => {
-      const locais = getProductLocations(p.id);
-      const locStr = locais.map(l => `${l.prateleira}${l.posicao} (${l.quantidade})`).join(', ') || '-';
-      return [p.nome, p.codigoInterno || '-', String(p.quantidade || 0), locStr];
-    });
-
-  autoTableSeguro(doc, {
-    startY: 183,
-    head: [['Produto', 'Codigo', 'Qtd', 'Localizacao']],
-    body: linhas, theme: 'grid',
-    headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 8.5, textColor: 30 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    columnStyles: { 2: { halign: 'center' } },
-  });
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 290, 200, { align: 'right' });
-    doc.text('D.Sync - Sistema de Estoque', 14, 200);
-  }
-  doc.save(`grafico_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF do gráfico gerado!', 'success');
-}
-
-function exportarCargaPDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(26, 43, 76);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Relatorio de Carga', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  const reservasCarga = state.carga.filter(c => c.pedidoCodigo === CARGA_PEDIDO_TAG);
-  const reservasPedido = state.carga.filter(c => c.pedidoCodigo && c.pedidoCodigo !== CARGA_PEDIDO_TAG);
-  const reservasAvulsas = state.carga.filter(c => !c.pedidoCodigo);
-  const totalReservas = state.carga.length;
-  const totalCx = state.carga.reduce((a, c) => a + c.quantidade, 0);
-
-  doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
-  doc.text('Resumo Geral', 14, 40);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Total de reservas: ${totalReservas}`, 14, 46);
-  doc.text(`Total de caixas reservadas: ${totalCx}`, 14, 52);
-  doc.text(`Reservas do Pedido de Carga: ${reservasCarga.length}`, 14, 58);
-  doc.text(`Reservas de Pedidos de Separacao: ${reservasPedido.length}`, 14, 64);
-  doc.text(`Reservas avulsas (sem pedido): ${reservasAvulsas.length}`, 14, 70);
-
-  let yOffset = 78;
-
-  if (state.pedidoCargaAtual.ativo && Object.keys(state.pedidoCargaAtual.itens || {}).length > 0) {
-    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-    doc.setFillColor(26, 43, 76);
-    doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(sanitizarParaPDF(`Pedido de Carga: ${state.pedidoCargaAtual.codigo}`), 16, yOffset);
-    yOffset += 3;
-    const itens = Object.values(state.pedidoCargaAtual.itens);
-    let totalPedida = 0, totalReservado = 0, totalProduzido = 0, totalFalta = 0;
-    const linhas = itens.map(item => {
-      const reservado = getReservadoCargaAtual(item.produtoId);
-      const produzido = item.quantidadeProduzida || 0;
-      const falta = getFaltaCargaAtual(item);
-      totalPedida += item.quantidadePedida; totalReservado += reservado;
-      totalProduzido += produzido; totalFalta += falta;
-      return [item.nome, item.codigoInterno || '-', String(item.quantidadePedida), String(reservado), String(produzido), String(falta), falta === 0 ? 'OK' : 'PENDENTE'];
-    });
-    linhas.push(['TOTAL', '', String(totalPedida), String(totalReservado), String(totalProduzido), String(totalFalta), totalFalta === 0 ? 'OK' : '']);
-    autoTableSeguro(doc, {
-      startY: yOffset + 3,
-      head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Produz.', 'Falta', 'Status']],
-      body: linhas, theme: 'grid',
-      headStyles: { fillColor: [26, 43, 76], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-      bodyStyles: { fontSize: 8.5, textColor: 30 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14, right: 14 },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center', fontStyle: 'bold' } },
-      didParseCell: function(data) {
-        if (data.row.index === linhas.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 242, 245]; }
-        if (data.column.index === 5 && data.row.index !== linhas.length - 1) {
-          const v = parseInt(data.cell.raw);
-          if (!isNaN(v) && v > 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
-          else if (v === 0) { data.cell.styles.textColor = [16, 185, 129]; }
-        }
-        if (data.column.index === 6 && data.row.index !== linhas.length - 1) {
-          const txt = String(data.cell.raw);
-          if (txt === 'PENDENTE') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
-          else if (txt === 'OK') { data.cell.styles.textColor = [16, 185, 129]; data.cell.styles.fontStyle = 'bold'; }
-        }
-      }
-    });
-    yOffset = doc.lastAutoTable.finalY + 12;
-  }
-
-  const pedidosComReserva = {};
-  reservasPedido.forEach(r => {
-    if (!pedidosComReserva[r.pedidoCodigo]) pedidosComReserva[r.pedidoCodigo] = [];
-    pedidosComReserva[r.pedidoCodigo].push(r);
-  });
-
-  Object.entries(pedidosComReserva).forEach(([codigoPedido, reservas]) => {
-    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-    doc.setFillColor(5, 150, 105);
-    doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(sanitizarParaPDF(`Pedido de Separacao: ${codigoPedido}`), 16, yOffset);
-    yOffset += 3;
-    const porProduto = {};
-    reservas.forEach(r => {
-      if (!porProduto[r.id]) {
-        const prod = state.produtos.find(p => p.id === r.id);
-        porProduto[r.id] = { nome: prod ? prod.nome : '(removido)', codigo: prod ? (prod.codigoInterno || '-') : '-', reservada: 0, locais: [] };
-      }
-      porProduto[r.id].reservada += r.quantidade;
-      const nomePrat = state.prateleiras.find(s => s.id === r.prateleira)?.nome || '?';
-      porProduto[r.id].locais.push(`${nomePrat}${r.posicao}(${r.quantidade})`);
-    });
-    const pedidoSalvo = state.pedidosSeparar.find(p => p.codigo === codigoPedido);
-    const linhas = Object.entries(porProduto).map(([pid, dados]) => {
-      const itemPedido = pedidoSalvo?.itens?.[pid];
-      const pedida = itemPedido ? itemPedido.pacotes : dados.reservada;
-      const falta = Math.max(0, pedida - dados.reservada);
-      return [dados.nome, dados.codigo, String(pedida), String(dados.reservada), String(falta), dados.locais.join(', ')];
-    });
-    autoTableSeguro(doc, {
-      startY: yOffset + 3,
-      head: [['Produto', 'Codigo', 'Pedida', 'Reserv.', 'Falta', 'Local']],
-      body: linhas, theme: 'grid',
-      headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-      bodyStyles: { fontSize: 8, textColor: 30 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14, right: 14 },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center', fontStyle: 'bold' } },
-      didParseCell: function(data) {
-        if (data.column.index === 4) {
-          const v = parseInt(data.cell.raw);
-          if (!isNaN(v) && v > 0) data.cell.styles.textColor = [220, 38, 38];
-          else if (v === 0) data.cell.styles.textColor = [16, 185, 129];
-        }
-      }
-    });
-    yOffset = doc.lastAutoTable.finalY + 12;
-  });
-
-  if (reservasAvulsas.length > 0) {
-    if (yOffset > 220) { doc.addPage(); yOffset = 20; }
-    doc.setFillColor(245, 158, 11);
-    doc.rect(14, yOffset - 5, 182, 8, 'F');
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text('Reservas Avulsas (sem pedido)', 16, yOffset);
-    yOffset += 3;
-    const linhas = reservasAvulsas.map(item => {
-      const produto = state.produtos.find(p => p.id === item.id);
-      const nomePrat = state.prateleiras.find(s => s.id === item.prateleira)?.nome || '?';
-      const local = item.prateleira && item.posicao ? `${nomePrat}${item.posicao}` : '-';
-      return [produto ? produto.nome : '(removido)', produto ? (produto.codigoInterno || '-') : '-', String(item.quantidade), local];
-    });
-    autoTableSeguro(doc, {
-      startY: yOffset + 3,
-      head: [['Produto', 'Codigo', 'Qtd (cx)', 'Local']],
-      body: linhas, theme: 'grid',
-      headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-      bodyStyles: { fontSize: 8.5, textColor: 30 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14, right: 14 },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' } }
-    });
-    yOffset = doc.lastAutoTable.finalY + 12;
-  }
-
-  if (totalReservas === 0) {
-    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
-    doc.text('Nenhuma reserva de carga no momento.', 14, yOffset);
-  }
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync - Sistema de Carga', 14, 290);
-  }
-  doc.save(`carga_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF da carga gerado!', 'success');
-}
-
-function exportarPedidosSepararPDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(5, 150, 105);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Pedidos para Separar', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  const total = state.pedidosSeparar.length;
-  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-  doc.text(`Total de pedidos pendentes: ${total}`, 14, 40);
-
-  if (total === 0) {
-    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
-    doc.text('Nenhum pedido pendente no momento.', 14, 52);
-  } else {
-    let yOffset = 48;
-    state.pedidosSeparar.forEach((pedido) => {
-      if (yOffset > 240) { doc.addPage(); yOffset = 20; }
-      doc.setFillColor(240, 253, 244);
-      doc.rect(14, yOffset - 5, 182, 8, 'F');
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(5, 150, 105);
-      doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
-      yOffset += 2;
-      const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.setTextColor(80, 80, 80);
-      doc.text(`Criado em: ${pedido.dataCriacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
-      yOffset += 5;
-      const linhas = Object.values(pedido.itens).map(item => {
-        const res = state.carga.filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo).reduce((a, c) => a + c.quantidade, 0);
-        const falta = Math.max(0, item.pacotes - res);
-        return [item.nome, item.codigoInterno || '-', String(item.pacotes), String(res), String(falta), falta === 0 ? 'OK' : 'FALTANDO'];
-      });
-      autoTableSeguro(doc, {
-        startY: yOffset + 3,
-        head: [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']],
-        body: linhas, theme: 'grid',
-        headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-        bodyStyles: { fontSize: 8.5, textColor: 30 },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 14, right: 14 },
-        columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
-        didParseCell: function(data) {
-          if (data.column.index === 5 && data.row.index >= 0) {
-            const txt = String(data.cell.raw);
-            if (txt === 'FALTANDO') data.cell.styles.textColor = [220, 38, 38];
-            else if (txt === 'OK') data.cell.styles.textColor = [16, 185, 129];
-          }
-        }
-      });
-      yOffset = doc.lastAutoTable.finalY + 12;
-    });
-  }
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync - Pedidos para Separar', 14, 290);
-  }
-  doc.save(`pedidos_separar_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF dos pedidos gerado!', 'success');
-}
-
-function exportarPedidosFinalizadosPDF() {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  doc.setFillColor(71, 85, 105);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Pedidos Finalizados', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-
-  const total = state.pedidosFinalizados.length;
-  doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-  doc.text(`Total de pedidos finalizados: ${total}`, 14, 40);
-
-  if (total === 0) {
-    doc.setTextColor(150, 150, 150); doc.setFontSize(11);
-    doc.text('Nenhum pedido finalizado ainda.', 14, 52);
-  } else {
-    let yOffset = 48;
-    const ordenados = [...state.pedidosFinalizados].reverse();
-    ordenados.forEach(pedido => {
-      if (yOffset > 240) { doc.addPage(); yOffset = 20; }
-      doc.setFillColor(241, 245, 249);
-      doc.rect(14, yOffset - 5, 182, 8, 'F');
-      doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(71, 85, 105);
-      doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 16, yOffset);
-      yOffset += 2;
-      const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-      doc.setTextColor(80, 80, 80);
-      doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'} - Total: ${totalCx} caixas`, 16, yOffset + 4);
-      yOffset += 5;
-      const linhas = Object.values(pedido.itens).map(item => [item.nome, item.codigoInterno || '-', String(item.pacotes)]);
-      autoTableSeguro(doc, {
-        startY: yOffset + 3,
-        head: [['Produto', 'Codigo', 'Qtd (cx)']],
-        body: linhas, theme: 'grid',
-        headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-        bodyStyles: { fontSize: 8.5, textColor: 30 },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 14, right: 14 },
-        columnStyles: { 2: { halign: 'center' } },
-      });
-      yOffset = doc.lastAutoTable.finalY + 12;
-    });
-  }
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync - Pedidos Finalizados', 14, 290);
-  }
-  doc.save(`pedidos_finalizados_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF dos finalizados gerado!', 'success');
-}
-
-function exportarPedidoIndividualPDF(codigo, tipo) {
-  if (!window.jspdf) { mostrarToast('❌ Biblioteca PDF ainda carregando...', 'error'); return; }
-  const lista = tipo === 'finalizado' ? state.pedidosFinalizados : state.pedidosSeparar;
-  const pedido = lista.find(p => p.codigo === codigo);
-  if (!pedido) { mostrarToast('❌ Pedido não encontrado!', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  const corFundo = tipo === 'finalizado' ? [71, 85, 105] : [5, 150, 105];
-  doc.setFillColor(...corFundo);
-  doc.rect(0, 0, 210, 25, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('D.Sync', 14, 12);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text(tipo === 'finalizado' ? 'Pedido Finalizado' : 'Pedido de Separacao', 14, 19);
-  doc.setTextColor(80, 80, 80); doc.setFontSize(9);
-  doc.text(`Emitido em: ${getJSDateStr()}`, 14, 32);
-  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...corFundo);
-  doc.text(sanitizarParaPDF(`Pedido: ${pedido.codigo}`), 14, 44);
-
-  const totalCx = Object.values(pedido.itens).reduce((a, i) => a + i.pacotes, 0);
-  const totalVol = Object.values(pedido.itens).reduce((a, i) => a + i.caixas, 0);
-  const totalItens = Object.values(pedido.itens).length;
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.setTextColor(0, 0, 0);
-  doc.text(`Criado em: ${pedido.dataCriacao || '-'}`, 14, 52);
-  if (tipo === 'finalizado') doc.text(`Finalizado em: ${pedido.dataFinalizacao || '-'}`, 14, 58);
-  doc.text(`Itens diferentes: ${totalItens}`, 14, tipo === 'finalizado' ? 64 : 58);
-  doc.text(`Total de volumes (caixas): ${totalVol}`, 14, tipo === 'finalizado' ? 70 : 64);
-  doc.text(`Total de caixas pedidas: ${totalCx}`, 14, tipo === 'finalizado' ? 76 : 70);
-
-  const linhas = Object.values(pedido.itens).map(item => {
-    if (tipo === 'finalizado') return [item.nome, item.codigoInterno || '-', String(item.pacotes)];
-    const res = state.carga.filter(c => c.id === item.produtoId && c.pedidoCodigo === pedido.codigo).reduce((a, c) => a + c.quantidade, 0);
-    const falta = Math.max(0, item.pacotes - res);
-    return [item.nome, item.codigoInterno || '-', String(item.pacotes), String(res), String(falta), falta === 0 ? 'OK' : 'FALTANDO'];
-  });
-
-  const headers = tipo === 'finalizado' ? [['Produto', 'Codigo', 'Qtd (cx)']] : [['Produto', 'Codigo', 'Pedido', 'Reservado', 'Falta', 'Status']];
-
-  autoTableSeguro(doc, {
-    startY: tipo === 'finalizado' ? 84 : 78,
-    head: headers, body: linhas, theme: 'grid',
-    headStyles: { fillColor: corFundo, textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: 30 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    columnStyles: tipo === 'finalizado' ? { 2: { halign: 'center' } } : { 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
-    didParseCell: function(data) {
-      if (tipo !== 'finalizado' && data.column.index === 5) {
-        const txt = String(data.cell.raw);
-        if (txt === 'FALTANDO') data.cell.styles.textColor = [220, 38, 38];
-        else if (txt === 'OK') data.cell.styles.textColor = [16, 185, 129];
-      }
-      if (tipo !== 'finalizado' && data.column.index === 4) {
-        const v = parseInt(data.cell.raw);
-        if (!isNaN(v) && v > 0) data.cell.styles.textColor = [220, 38, 38];
-        else if (v === 0) data.cell.styles.textColor = [16, 185, 129];
-      }
+function abrirScannerProdutoParaCampo(campoId, callback) {
+  scannerProdutoCallback = (codigo, produto) => {
+    const campo = document.getElementById(campoId);
+    if (campo) {
+      campo.value = codigo;
+      campo.dispatchEvent(new Event('input'));
     }
-  });
-
-  const finalY = doc.lastAutoTable.finalY + 20;
-  if (finalY < 260) {
-    doc.setDrawColor(150, 150, 150);
-    doc.line(14, finalY, 90, finalY);
-    doc.line(120, finalY, 196, finalY);
-    doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-    doc.text('Responsavel pela separacao', 14, finalY + 4);
-    doc.text('Conferente', 120, finalY + 4);
-  }
-
-  const totalPag = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPag; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-    doc.text(`Pagina ${i} de ${totalPag}`, 200, 290, { align: 'right' });
-    doc.text('D.Sync', 14, 290);
-  }
-  doc.save(`pedido_${pedido.codigo}_${getJSDateSlug()}.pdf`);
-  mostrarToast('📄 PDF do pedido gerado!', 'success');
+    if (typeof callback === 'function') {
+      try { callback(codigo, produto); } catch (e) { console.error(e); }
+    }
+    mostrarToast(`✅ Código capturado!`, 'success');
+  };
+  
+  const modal = document.getElementById('modalScannerProduto');
+  if (!modal) { alert('❌ Modal do scanner não encontrado!'); return; }
+  
+  modal.style.display = 'flex';
+  const input = document.getElementById('scannerProdutoInput');
+  if (input) input.value = '';
+  
+  setTimeout(iniciarCameraScannerProduto, 250);
 }
 
-// ===== Injeção de botões PDF =====
-function injetarBotoesPDF() {
-  const shelfControls = document.querySelector('#sub-tab-prateleiras .controls');
-  if (shelfControls && !document.getElementById('btnPDFEstoque')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFEstoque'; btn.className = 'info';
-    btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarEstoquePDF;
-    shelfControls.appendChild(btn);
+function iniciarCameraScannerProduto() {
+  const readerEl = document.getElementById('scannerProdutoReader');
+  if (!readerEl) return;
+  readerEl.innerHTML = '';
+
+  if (html5QrCodeScannerProduto) {
+    html5QrCodeScannerProduto.stop()
+      .then(() => html5QrCodeScannerProduto.clear())
+      .catch(() => {})
+      .finally(() => {
+        html5QrCodeScannerProduto = null;
+        criarInstanciaScannerProduto();
+      });
+  } else {
+    criarInstanciaScannerProduto();
   }
-
-  const graficoControls = document.querySelector('.grafico-controls');
-  if (graficoControls && !document.getElementById('btnPDFGrafico')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFGrafico';
-    btn.textContent = '📄 Exportar PDF';
-    btn.onclick = exportarGraficoPDF;
-    graficoControls.appendChild(btn);
-  }
-
-  const separarContainer = document.querySelector('#sub-tab-separar .pedido-lista-container');
-  if (separarContainer && !document.getElementById('btnPDFSeparar')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFSeparar'; btn.className = 'btn btn-info btn-md';
-    btn.style.marginBottom = '15px';
-    btn.textContent = '📄 Exportar Lista em PDF';
-    btn.onclick = exportarPedidosSepararPDF;
-    separarContainer.insertBefore(btn, separarContainer.querySelector('#listaPedidosSeparar'));
-  }
-
-  const finalContainer = document.querySelector('#sub-tab-finalizado .pedido-lista-container');
-  if (finalContainer && !document.getElementById('btnPDFFinal')) {
-    const btn = document.createElement('button');
-    btn.id = 'btnPDFFinal'; btn.className = 'btn btn-info btn-md';
-    btn.style.marginBottom = '15px';
-    btn.textContent = '📄 Exportar Lista em PDF';
-    btn.onclick = exportarPedidosFinalizadosPDF;
-    finalContainer.insertBefore(btn, finalContainer.querySelector('#listaPedidosFinalizados'));
-  }
-
-  document.querySelectorAll('#listaPedidosSeparar .pedido-card').forEach(card => {
-    if (card.querySelector('.btn-pdf-pedido')) return;
-    const codigo = card.querySelector('.pedido-codigo')?.textContent.replace('📋', '').trim();
-    if (!codigo) return;
-    const acoes = card.querySelector('.pedido-acoes');
-    if (!acoes) return;
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-sm btn-pdf-pedido';
-    btn.style.background = '#7c3aed'; btn.style.color = 'white';
-    btn.textContent = '📄 PDF';
-    btn.onclick = () => exportarPedidoIndividualPDF(codigo, 'separar');
-    acoes.appendChild(btn);
-  });
-
-  document.querySelectorAll('#listaPedidosFinalizados .pedido-card').forEach(card => {
-    if (card.querySelector('.btn-pdf-pedido')) return;
-    const codigo = card.querySelector('.pedido-codigo')?.textContent.replace('✅', '').trim();
-    if (!codigo) return;
-    const acoes = card.querySelector('.pedido-acoes');
-    if (!acoes) return;
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-sm btn-pdf-pedido';
-    btn.style.background = '#7c3aed'; btn.style.color = 'white';
-    btn.textContent = '📄 PDF';
-    btn.onclick = () => exportarPedidoIndividualPDF(codigo, 'finalizado');
-    acoes.appendChild(btn);
-  });
 }
 
-// ============================================================
-// QR CODE DAS PRATELEIRAS + SCANNER FLUTUANTE
-// ============================================================
-
-function imprimirQRCodePrateleira(shelfId) {
-  const shelf = state.prateleiras.find(s => s.id === shelfId);
-  if (!shelf) { mostrarToast('❌ Prateleira não encontrada!', 'error'); return; }
-  const codigo = shelf.codigoBarras || gerarCodigoPrateleira(shelf.id);
-  const win = window.open('', '_blank');
-  if (!win) { mostrarToast('❌ Bloqueador de pop-up ativo!', 'error'); return; }
-  win.document.write(`
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>QR Code - Prateleira ${shelf.nome}</title>
-      <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
-      <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f4f6fb; }
-        .qr-card {
-          display: inline-block; border: 3px solid #1A2B4C; border-radius: 20px;
-          padding: 35px 45px; margin: 20px; background: white;
-          box-shadow: 0 12px 40px rgba(26,43,76,0.15);
-        }
-        .qr-nome { font-size: 34px; font-weight: 800; color: #1A2B4C; margin-bottom: 6px; }
-        .qr-codigo { font-size: 20px; font-weight: 700; color: #F59E0B; letter-spacing: 3px; margin-bottom: 20px; }
-        .qr-img { margin: 20px 0; }
-        .qr-legenda { font-size: 13px; color: #666; margin-top: 12px; letter-spacing: 1px; }
-        @media print { .no-print { display: none !important; } body { padding: 0; background: white; } .qr-card { box-shadow: none; } }
-      </style>
-    </head>
-    <body>
-      <div class="no-print" style="margin-bottom:20px;">
-        <button onclick="window.print()" style="padding:14px 36px;background:#1A2B4C;color:white;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;">🖨️ Imprimir QR Code</button>
-      </div>
-      <div class="qr-card">
-        <div class="qr-nome">📦 Prateleira ${shelf.nome}</div>
-        <div class="qr-codigo">${codigo}</div>
-        <div id="qrcode" class="qr-img"></div>
-        <div class="qr-legenda">D.Sync · Escaneie para movimentação</div>
-      </div>
-      <script>
-        new QRCode(document.getElementById("qrcode"), {
-          text: "${codigo}", width: 320, height: 320,
-          colorDark: "#1A2B4C", colorLight: "#FFFFFF",
-          correctLevel: QRCode.CorrectLevel.H
-        });
-      <\/script>
-    </body>
-    </html>
-  `);
-  win.document.close();
-}
-
-function imprimirTodosQRCodes() {
-  if (state.prateleiras.length === 0) {
-    mostrarToast('❌ Nenhuma prateleira cadastrada!', 'error');
+function criarInstanciaScannerProduto() {
+  try {
+    html5QrCodeScannerProduto = new Html5Qrcode("scannerProdutoReader");
+  } catch (e) {
+    console.error(e);
+    mostrarToast('❌ Erro ao iniciar câmera!', 'error');
     return;
   }
-  const win = window.open('', '_blank');
-  if (!win) { mostrarToast('❌ Bloqueador de pop-up ativo!', 'error'); return; }
 
-  let cardsHtml = '';
-  state.prateleiras.forEach(shelf => {
-    const codigo = shelf.codigoBarras || gerarCodigoPrateleira(shelf.id);
-    cardsHtml += `
-      <div class="qr-card">
-        <div class="qr-nome">📦 ${shelf.nome}</div>
-        <div class="qr-codigo">${codigo}</div>
-        <div id="qr-${shelf.id}" class="qr-img"></div>
-      </div>`;
+  const formatos = [];
+  if (window.Html5QrcodeSupportedFormats) {
+    const F = window.Html5QrcodeSupportedFormats;
+    [F.CODE_128, F.CODE_39, F.CODE_93, F.CODABAR,
+     F.EAN_13, F.EAN_8, F.ITF, F.UPC_A, F.UPC_E,
+     F.QR_CODE, F.DATA_MATRIX, F.PDF_417, F.AZTEC
+    ].forEach(f => { if (f !== undefined) formatos.push(f); });
+  }
+
+  const config = {
+    fps: 20,
+    qrbox: function(w, h) {
+      const min = Math.min(w, h);
+      return { width: Math.floor(min * 0.9), height: Math.floor(min * 0.5) };
+    },
+    aspectRatio: 1.7
+  };
+
+  try {
+    if (formatos.length > 0) {
+      html5QrCodeScannerProduto = new Html5Qrcode("scannerProdutoReader", {
+        formatsToSupport: formatos,
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      });
+    }
+  } catch (e) { console.warn('Formatos customizados falharam, usando padrão:', e); }
+
+  html5QrCodeScannerProduto.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {}
+      processarCodigoScannerProduto(decodedText);
+    },
+    () => {}
+  ).catch(err => {
+    console.error('Erro câmera produto:', err);
+    mostrarToast('❌ Erro ao acessar câmera: ' + (err?.message || 'verifique permissões'), 'error');
   });
-
-  let geradoresJs = '';
-  state.prateleiras.forEach(s => {
-    const codigo = s.codigoBarras || gerarCodigoPrateleira(s.id);
-    geradoresJs += `new QRCode(document.getElementById("qr-${s.id}"), { text: "${codigo}", width: 220, height: 220, colorDark: "#1A2B4C", colorLight: "#FFFFFF", correctLevel: QRCode.CorrectLevel.H });\n`;
-  });
-
-  win.document.write(`
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Todos os QR Codes - D.Sync</title>
-      <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
-      <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 25px; background: #f4f6fb; }
-        .qr-card {
-          display: inline-block; border: 3px solid #1A2B4C; border-radius: 18px;
-          padding: 22px 28px; margin: 12px; background: white;
-          box-shadow: 0 8px 24px rgba(26,43,76,0.12);
-          page-break-inside: avoid; vertical-align: top;
-        }
-        .qr-nome { font-size: 26px; font-weight: 800; color: #1A2B4C; }
-        .qr-codigo { font-size: 15px; font-weight: 700; color: #F59E0B; letter-spacing: 2px; margin-bottom: 12px; }
-        @media print { .no-print { display: none !important; } body { padding: 0; background: white; } .qr-card { box-shadow: none; } }
-      </style>
-    </head>
-    <body>
-      <div class="no-print" style="margin-bottom:20px;">
-        <button onclick="window.print()" style="padding:14px 36px;background:#1A2B4C;color:white;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;">🖨️ Imprimir Todos</button>
-      </div>
-      ${cardsHtml}
-      <script>
-        ${geradoresJs}
-      <\/script>
-    </body>
-    </html>
-  `);
-  win.document.close();
 }
 
-// ---------- Scanner flutuante de prateleira ----------
+function confirmarScannerProdutoManual() {
+  const input = document.getElementById('scannerProdutoInput');
+  const cod = (input?.value || '').trim().toUpperCase();
+  if (!cod) { mostrarToast('❌ Digite um código!', 'error'); return; }
+  processarCodigoScannerProduto(cod);
+}
+
+function processarCodigoScannerProduto(codigoLido) {
+  const cod = String(codigoLido || '').trim().toUpperCase();
+  if (!cod) return;
+
+  let produto = state.produtos.find(p =>
+    (p.codigoInterno && p.codigoInterno.toUpperCase() === cod) ||
+    (p.barcode && p.barcode.toUpperCase() === cod)
+  );
+
+  if (typeof scannerProdutoCallback === 'function') {
+    const cb = scannerProdutoCallback;
+    scannerProdutoCallback = null;
+    fecharScannerProduto(false);
+    try { cb(cod, produto); } catch (e) { console.error(e); }
+    return;
+  }
+
+  fecharScannerProduto(false);
+  if (produto) mostrarToast(`✅ ${produto.nome} detectado!`, 'success');
+  else mostrarToast(`⚠️ Código "${cod}" lido (não cadastrado)`, 'warning');
+}
+
+function fecharScannerProduto() {
+  const modal = document.getElementById('modalScannerProduto');
+  if (modal) modal.style.display = 'none';
+  if (html5QrCodeScannerProduto) {
+    html5QrCodeScannerProduto.stop()
+      .then(() => html5QrCodeScannerProduto.clear())
+      .catch(() => {})
+      .finally(() => { html5QrCodeScannerProduto = null; });
+  }
+  scannerProdutoCallback = null;
+}
+
+// ============================================================
+// SCANNER DE PRATELEIRA (QR Code)
+// ============================================================
 let html5QrCodeScannerPrateleira = null;
 let scannerPrateleiraCallback = null;
 
@@ -5060,220 +4321,9 @@ function abrirScannerParaCampo(campoId) {
   setTimeout(iniciarCameraScannerPrateleira, 250);
 }
 
-// ========== SCANNER DE PRODUTO (DIRETO NO CAMPO) ==========
-let html5QrCodeScannerProduto = null;
-let scannerProdutoCallback = null;
-
-function abrirScannerProdutoParaCampo(campoId, callback) {
-  scannerProdutoCallback = (codigo, produto) => {
-    const campo = document.getElementById(campoId);
-    if (campo) {
-      campo.value = codigo;
-      campo.dispatchEvent(new Event('input'));
-    }
-    if (typeof callback === 'function') {
-      try { callback(codigo, produto); } catch (e) { console.error(e); }
-    }
-    mostrarToast(`✅ Código capturado!`, 'success');
-  };
-  
-  const modal = document.getElementById('modalScannerProduto');
-  if (!modal) { alert('❌ Modal do scanner não encontrado!'); return; }
-  
-  modal.style.display = 'flex';
-  const input = document.getElementById('scannerProdutoInput');
-  if (input) input.value = '';
-  
-  setTimeout(iniciarCameraScannerProduto, 250);
-}
-
-function iniciarCameraScannerProduto() {
-  const readerEl = document.getElementById('scannerProdutoReader');
-  if (!readerEl) return;
-  readerEl.innerHTML = '';
-
-  if (html5QrCodeScannerProduto) {
-    html5QrCodeScannerProduto.stop()
-      .then(() => html5QrCodeScannerProduto.clear())
-      .catch(() => {})
-      .finally(() => {
-        html5QrCodeScannerProduto = null;
-        criarInstanciaScannerProduto();
-      });
-  } else {
-    criarInstanciaScannerProduto();
-  }
-}
-
-function criarInstanciaScannerProduto() {
-  try {
-    html5QrCodeScannerProduto = new Html5Qrcode("scannerProdutoReader");
-  } catch (e) {
-    console.error(e);
-    mostrarToast('❌ Erro ao iniciar câmera!', 'error');
-    return;
-  }
-
-  const formatos = [];
-  if (window.Html5QrcodeSupportedFormats) {
-    const F = window.Html5QrcodeSupportedFormats;
-    [F.CODE_128, F.CODE_39, F.CODE_93, F.CODABAR,
-     F.EAN_13, F.EAN_8, F.ITF, F.UPC_A, F.UPC_E,
-     F.QR_CODE, F.DATA_MATRIX, F.PDF_417, F.AZTEC
-    ].forEach(f => { if (f !== undefined) formatos.push(f); });
-  }
-
-  const config = {
-    fps: 20,
-    qrbox: function(w, h) {
-      const min = Math.min(w, h);
-      return { width: Math.floor(min * 0.9), height: Math.floor(min * 0.5) };
-    },
-    aspectRatio: 1.7
-  };
-
-  try {
-    if (formatos.length > 0) {
-      html5QrCodeScannerProduto = new Html5Qrcode("scannerProdutoReader", {
-        formatsToSupport: formatos,
-        useBarCodeDetectorIfSupported: true,
-        verbose: false
-      });
-    }
-  } catch (e) { console.warn('Formatos customizados falharam, usando padrão:', e); }
-
-  html5QrCodeScannerProduto.start(
-    { facingMode: "environment" },
-    config,
-    (decodedText) => {
-      try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {}
-      processarCodigoScannerProduto(decodedText);
-    },
-    () => {}
-  ).catch(err => {
-    console.error('Erro câmera produto:', err);
-    mostrarToast('❌ Erro ao acessar câmera: ' + (err?.message || 'verifique permissões'), 'error');
-  });
-}
-
-function confirmarScannerProdutoManual() {
-  const input = document.getElementById('scannerProdutoInput');
-  const cod = (input?.value || '').trim().toUpperCase();
-  if (!cod) { mostrarToast('❌ Digite um código!', 'error'); return; }
-  processarCodigoScannerProduto(cod);
-}
-
-function processarCodigoScannerProduto(codigoLido) {
-  const cod = String(codigoLido || '').trim().toUpperCase();
-  if (!cod) return;
-
-  let produto = state.produtos.find(p =>
-    (p.codigoInterno && p.codigoInterno.toUpperCase() === cod) ||
-    (p.barcode && p.barcode.toUpperCase() === cod)
-  );
-
-  if (typeof scannerProdutoCallback === 'function') {
-    const cb = scannerProdutoCallback;
-    scannerProdutoCallback = null;
-    fecharScannerProduto(false);
-    try { cb(cod, produto); } catch (e) { console.error(e); }
-    return;
-  }
-
-  fecharScannerProduto(false);
-  if (produto) mostrarToast(`✅ ${produto.nome} detectado!`, 'success');
-  else mostrarToast(`⚠️ Código "${cod}" lido (não cadastrado)`, 'warning');
-}
-
-function fecharScannerProduto() {
-  const modal = document.getElementById('modalScannerProduto');
-  if (modal) modal.style.display = 'none';
-  if (html5QrCodeScannerProduto) {
-    html5QrCodeScannerProduto.stop()
-      .then(() => html5QrCodeScannerProduto.clear())
-      .catch(() => {})
-      .finally(() => { html5QrCodeScannerProduto = null; });
-  }
-  scannerProdutoCallback = null;
-}
-// Salvar dados na nuvem
-async function salvarNaNuvem() {
-  if (!window.supabase || !usuarioSupabase) return;
-  
-  const dados = {
-    produtos: state.produtos,
-    prateleiras: state.prateleiras,
-    carga: state.carga,
-    historico: state.historico,
-    insumos: state.insumos,
-    configInsumos: state.configInsumos,
-    produtoInsumoMap: state.produtoInsumoMap,
-    pedidosSeparar: state.pedidosSeparar,
-    pedidosFinalizados: state.pedidosFinalizados,
-    injecao: state.injecao,
-    injetando: state.injetando,
-    injetados: state.injetados,
-    materiaPrima: state.materiaPrima,
-    pedidoCargaAtual: state.pedidoCargaAtual
-  };
-
-  const { error } = await window.supabase
-    .from('backups')
-    .insert({ user_id: usuarioSupabase.id, data: dados });
-
-  if (error) {
-    console.error('❌ Erro ao salvar na nuvem:', error);
-  } else {
-    console.log('☁️ Backup na nuvem realizado!');
-    const el = document.getElementById('ultimoBackupNuvem');
-    if (el) el.textContent = new Date().toLocaleString('pt-BR');
-  }
-}
-
-// Carregar dados da nuvem
-async function carregarDaNuvem() {
-  if (!window.supabase || !usuarioSupabase) return;
-
-  const { data, error } = await window.supabase
-    .from('backups')
-    .select('data')
-    .eq('user_id', usuarioSupabase.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 = nenhum dado encontrado
-    console.error('❌ Erro ao carregar:', error);
-    return;
-  }
-
-  if (data && data.data) {
-    console.log('☁️ Dados carregados da nuvem!');
-    state.produtos = data.data.produtos || [];
-    state.prateleiras = data.data.prateleiras || [];
-    state.carga = data.data.carga || [];
-    state.historico = data.data.historico || [];
-    state.insumos = data.data.insumos || state.insumos;
-    state.configInsumos = data.data.configInsumos || state.configInsumos;
-    state.produtoInsumoMap = data.data.produtoInsumoMap || {};
-    state.pedidosSeparar = data.data.pedidosSeparar || [];
-    state.pedidosFinalizados = data.data.pedidosFinalizados || [];
-    state.injecao = data.data.injecao || [];
-    state.injetando = data.data.injetando || [];
-    state.injetados = data.data.injetados || [];
-    state.materiaPrima = data.data.materiaPrima || state.materiaPrima;
-    state.pedidoCargaAtual = data.data.pedidoCargaAtual || { ativo: false, codigo: '', itens: {} };
-
-    atualizarTudo();
-    mostrarToast('☁️ Dados sincronizados da nuvem!', 'success');
-  } else {
-    console.log('Nenhum backup na nuvem ainda. Começando vazio.');
-  }
-}
 // ============================================================
 // EVENTOS GLOBAIS E HOOKS
 // ============================================================
-
 document.addEventListener('DOMContentLoaded', function () {
   setTimeout(injetarBotoesPDF, 500);
 
@@ -5282,12 +4332,12 @@ document.addEventListener('DOMContentLoaded', function () {
     inputLeitor.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); adicionarCodigoLido(); }
     });
+  }
 
-   if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
     .then(() => console.log('Service Worker registrado (PWA ativo)'))
     .catch(err => console.error('Erro no SW:', err));
-    } 
   }
 
   const inputManualPrat = document.getElementById('scannerPrateleiraInput');
@@ -5352,4 +4402,4 @@ if (_mostrarSubAbaOriginal) {
 }
 
 // ===== INICIAR =====
-console.log('🚀 D.Sync - Sistema completo + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código + Scanner na Posição (corrigido)!');
+console.log('🚀 D.Sync - Sistema completo + Supabase + PDFs + Câmera + QR Code + Scanner Produto + Adicionar por Código + Scanner na Posição!');
